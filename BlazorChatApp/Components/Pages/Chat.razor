@@ -22,7 +22,7 @@
                     <div class="p-2 rounded w-100 d-flex justify-content-start" style="background-color: #f9f9f9; margin-bottom: 2%">
                         @if (item.Content != null)
                         {
-                            @((MarkupString)response)
+                            @((MarkupString)item.Content)
                         }
                     </div>
                 }
@@ -39,17 +39,7 @@
 
 @code {
 
-    @using Microsoft.SemanticKernel;
-    @using Microsoft.SemanticKernel.ChatCompletion;
-    @using Azure.Identity;
-    @using Microsoft.Azure.Cosmos;
     @using System.Collections.ObjectModel
-    @using Newtonsoft.Json
-    @using Microsoft.Data.SqlClient;
-    @using Azure;
-    @using Azure.AI.OpenAI;
-    @using OpenAI.Embeddings;
-    @using System.ClientModel
 
     public class Message
     {
@@ -57,6 +47,7 @@
         public bool IsUser { get; set; } = true;
     }
 
+    // List to hold rendered messages
     public List<Message> Messages { get; set; } = new List<Message>();
 
     public Message message { get; set; } = new Message();
@@ -78,34 +69,42 @@
         dynamic[] titleVector
     );
 
+    // Holds retrieved data from Cosmos DB
     public string responseCosmos { get; set; } = " ";
+    // Holds the response from the chat completion
     public string response { get; set; } = " ";
+
+    ChatHistory chatHistory = new("""You are a helpful assistant that answers questions about my Cosmos DB data""");
 
     private async Task SemanticKernelClient()
     {
+        // reset the response variables
+        responseCosmos = " ";
+        response = " ";
+
         // Azure OpenAI app settings
-        string deploymentName = _config["OpenAI:DEPLOYMENT_NAME"];
-        string endpoint = _config["OpenAI:ENDPOINT"];
-        string apiKey = _config["OpenAI:API_KEY"];
-        string modelId = _config["OpenAI:MODEL_ID"];
+        string deploymentName = _config["OpenAI:DEPLOYMENT_NAME"] ?? throw new InvalidOperationException("OpenAI:DEPLOYMENT_NAME not configured");
+        string endpoint = _config["OpenAI:ENDPOINT"] ?? throw new InvalidOperationException("OpenAI:ENDPOINT not configured");
+        string apiKey = _config["OpenAI:API_KEY"] ?? throw new InvalidOperationException("OpenAI:API_KEY not configured");
+        string modelId = _config["OpenAI:MODEL_ID"] ?? throw new InvalidOperationException("OpenAI:MODEL_ID not configured");
 
         // Semantic Kernel builder
         var builder = Kernel.CreateBuilder();
 
         // Chat completion service - local development
         builder.Services.AddAzureOpenAIChatCompletion(
+             deploymentName: deploymentName,
+             endpoint: endpoint,
+             apiKey: apiKey,
+             modelId: modelId
+         );
+
+        // Chat completion service - Managed Identity
+        @* builder.Services.AddAzureOpenAIChatCompletion(
             deploymentName: deploymentName,
             endpoint: endpoint,
-            apiKey: apiKey,
-            modelId: modelId
-        );
-
-        // // Chat completion service - Managed Identity
-        // builder.Services.AddAzureOpenAIChatCompletion(
-        //     deploymentName: deploymentName,
-        //     endpoint: endpoint,
-        //     credentials: new DefaultAzureCredential()
-        // );
+            credentials: new DefaultAzureCredential()
+        ); *@
 
         var kernel = builder.Build();
 
@@ -126,27 +125,27 @@
 
         // Azure OpenAI client - local development
         AzureOpenAIClient azureClient = new(
-            new Uri("https://<your-endpoint-name>.openai.azure.com/"),
+            new Uri(endpoint),
             new ApiKeyCredential(apiKey)
         );
 
-        // // Azure OpenAI client - Managed Identity
-        // AzureOpenAIClient azureClient = new(
-        //      new Uri("https://<your-endpoint-name>.openai.azure.com/"),
-        //      new DefaultAzureCredential()
-        // );
+        // Azure OpenAI client - Managed Identity
+        @* AzureOpenAIClient azureClient = new(
+             new Uri("https://jefmarti-open-ai.openai.azure.com/"),
+             new DefaultAzureCredential()
+        ); *@
 
         EmbeddingClient ec = azureClient.GetEmbeddingClient("text-embedding-ada-002");
 
         // Generate embedding for the user message
-        OpenAIEmbedding embedding = await ec.GenerateEmbeddingAsync(message.Content);
+        OpenAIEmbedding embedding = await ec.GenerateEmbeddingAsync(message.Content ?? string.Empty);
 
         ReadOnlyMemory<float> vector = embedding.ToFloats();
 
-        // Cosmos Hybrid search w/ query definition and parameter
-        var queryDef = new QueryDefinition(
-                query: @"SELECT TOP 5 * FROM c ORDER BY RANK RRF(FullTextScore(c.content, ['@userMessage']), VectorDistance(c.titleVector, [@embedding]))"
-            ).WithParameter("@embedding", vector);
+        // Cosmos Hybrid search w/ query definition (NOTE: FullTextScore requires a string literal so SQL parameter can't work here)
+        var userMessage = (message.Content ?? string.Empty).Replace("'", "''"); // Escape single quotes
+        var query = $@"SELECT TOP 5 * FROM c ORDER BY RANK RRF(FullTextScore(c.content, '{userMessage}'), VectorDistance(c.titleVector, [@embedding]))";
+        var queryDef = new QueryDefinition(query).WithParameter("@embedding", vector);
 
         using FeedIterator<VectorItem> feed = container.GetItemQueryIterator<VectorItem>(
             queryDefinition: queryDef
@@ -163,7 +162,7 @@
                 results.Add(result);
             }
         }
-        // Write results
+        // Write results from Cosmos DB to output logs
         foreach (var item in results)
         {
             Console.WriteLine($"Found item:\t{item.content}");
@@ -178,8 +177,7 @@
                     Cosmos DB Results: {{$responseCosmos}}
                     Assistant: ");
 
-        ChatHistory chatHistory = new("""You are a helpful assistant that answers questions about my Cosmos DB data""");
-
+        // Send user message and Cosmos DB results to chat completion model
         var chatResult = kernel.InvokeStreamingAsync<StreamingChatMessageContent>(
                 chat,
                 new() {
@@ -196,13 +194,11 @@
 
         // Append messages to chat history
         chatHistory.AddUserMessage(message.Content!);
-        chatHistory.AddUserMessage("Cosmos DB results: " + responseCosmos);
         chatHistory.AddAssistantMessage(response);
 
-        // Add messages to list
+        // Add messages to list for rendering
         Messages.Add(new Message { Content = message.Content, IsUser = true });
-        Messages.Add(new Message { Content = responseCosmos, IsUser = false });
-
+        Messages.Add(new Message { Content = response, IsUser = false });
     }
 }
 

@@ -1,4 +1,5 @@
 using BlazorChatApp.Components;
+using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 
