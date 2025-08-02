@@ -1,0 +1,204 @@
+﻿@page "/chat"
+@rendermode InteractiveServer
+@inject Microsoft.Extensions.Configuration.IConfiguration _config
+
+<PageTitle>Chat</PageTitle>
+
+<h1>Chat</h1>
+
+<div class="container d-flex flex-column row">
+    <div class="p-2 col">
+        @foreach (var item in Messages)
+        {
+            <div class="w-100 d-flex flex-column">
+                @if (item.IsUser == true)
+                {
+                    <div class="parent p-2 rounded w-100 d-flex justify-content-end">
+                        <b>@item.Content</b>
+                    </div>
+                }
+                @if (item.IsUser == false)
+                {
+                    <div class="p-2 rounded w-100 d-flex justify-content-start" style="background-color: #f9f9f9; margin-bottom: 2%">
+                        @if (item.Content != null)
+                        {
+                            @((MarkupString)item.Content)
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+    <div class="sticky-bottom w-100 p-2 rounded mx-auto dflex row">
+        <textarea class="form-control w-75 col-2" rows="1" @bind="message.Content">
+        </textarea>
+        <button class="btn btn-primary ml-auto col-3" style="float: right" @onclick="SemanticKernelClient">Send Request</button>
+    </div>
+</div>
+
+
+@code {
+
+    @using System.Collections.ObjectModel
+
+    public class Message
+    {
+        public string? Content { get; set; }
+        public bool IsUser { get; set; } = true;
+    }
+
+    // List to hold rendered messages
+    public List<Message> Messages { get; set; } = new List<Message>();
+
+    public Message message { get; set; } = new Message();
+
+    public record Product(
+        string id,
+        string category,
+        string name,
+        int quantity,
+        decimal price,
+        bool clearance
+    );
+
+    public record VectorItem(
+        string id,
+        string title,
+        string content,
+        string category,
+        dynamic[] titleVector
+    );
+
+    // Holds retrieved data from Cosmos DB
+    public string responseCosmos { get; set; } = " ";
+    // Holds the response from the chat completion
+    public string response { get; set; } = " ";
+
+    ChatHistory chatHistory = new("""You are a helpful assistant that answers questions about my Cosmos DB data""");
+
+    private async Task SemanticKernelClient()
+    {
+        // reset the response variables
+        responseCosmos = " ";
+        response = " ";
+
+        // Azure OpenAI app settings
+        string deploymentName = _config["OpenAI:DEPLOYMENT_NAME"] ?? throw new InvalidOperationException("OpenAI:DEPLOYMENT_NAME not configured");
+        string endpoint = _config["OpenAI:ENDPOINT"] ?? throw new InvalidOperationException("OpenAI:ENDPOINT not configured");
+        string apiKey = _config["OpenAI:API_KEY"] ?? throw new InvalidOperationException("OpenAI:API_KEY not configured");
+        string modelId = _config["OpenAI:MODEL_ID"] ?? throw new InvalidOperationException("OpenAI:MODEL_ID not configured");
+
+        // Semantic Kernel builder
+        var builder = Kernel.CreateBuilder();
+
+        // Chat completion service - local development
+        builder.Services.AddAzureOpenAIChatCompletion(
+             deploymentName: deploymentName,
+             endpoint: endpoint,
+             apiKey: apiKey,
+             modelId: modelId
+         );
+
+        // Chat completion service - Managed Identity
+        @* builder.Services.AddAzureOpenAIChatCompletion(
+            deploymentName: deploymentName,
+            endpoint: endpoint,
+            credentials: new DefaultAzureCredential()
+        ); *@
+
+        var kernel = builder.Build();
+
+        #region CosmosDB
+        CosmosClient client = new(
+            accountEndpoint: _config["COSMOS_DB:ENDPOINT_DB"],
+            tokenCredential: new DefaultAzureCredential()
+        );
+
+        Database database = client.GetDatabase("vectordb"); // add database name here
+        Container container = database.GetContainer("Container3"); // add container name here
+        #endregion
+
+        // Set SQL Parameter to pass in user message
+        SqlParameter param = new SqlParameter();
+        param.ParameterName = "@userMessage";
+        param.Value = message.Content;
+
+        // Azure OpenAI client - local development
+        AzureOpenAIClient azureClient = new(
+            new Uri(endpoint),
+            new ApiKeyCredential(apiKey)
+        );
+
+        // Azure OpenAI client - Managed Identity
+        @* AzureOpenAIClient azureClient = new(
+             new Uri("https://jefmarti-open-ai.openai.azure.com/"),
+             new DefaultAzureCredential()
+        ); *@
+
+        EmbeddingClient ec = azureClient.GetEmbeddingClient("text-embedding-ada-002");
+
+        // Generate embedding for the user message
+        OpenAIEmbedding embedding = await ec.GenerateEmbeddingAsync(message.Content ?? string.Empty);
+
+        ReadOnlyMemory<float> vector = embedding.ToFloats();
+
+        // Cosmos Hybrid search w/ query definition (NOTE: FullTextScore requires a string literal so SQL parameter can't work here)
+        var userMessage = (message.Content ?? string.Empty).Replace("'", "''"); // Escape single quotes
+        var query = $@"SELECT TOP 5 * FROM c ORDER BY RANK RRF(FullTextScore(c.content, '{userMessage}'), VectorDistance(c.titleVector, [@embedding]))";
+        var queryDef = new QueryDefinition(query).WithParameter("@embedding", vector);
+
+        using FeedIterator<VectorItem> feed = container.GetItemQueryIterator<VectorItem>(
+            queryDefinition: queryDef
+        );
+
+        // create and add the results to a list
+        var results = new List<VectorItem>();
+
+        while (feed.HasMoreResults)
+        {
+            var page = await feed.ReadNextAsync();
+            foreach (var result in page)
+            {
+                results.Add(result);
+            }
+        }
+        // Write results from Cosmos DB to output logs
+        foreach (var item in results)
+        {
+            Console.WriteLine($"Found item:\t{item.content}");
+            var resultItem = JsonConvert.SerializeObject(item.content);
+            responseCosmos += resultItem;
+        };
+        
+        // Create prompt template
+        var chat = kernel.CreateFunctionFromPrompt(
+                        @"{{$history}}
+                    User: {{$request}}
+                    Cosmos DB Results: {{$responseCosmos}}
+                    Assistant: ");
+
+        // Send user message and Cosmos DB results to chat completion model
+        var chatResult = kernel.InvokeStreamingAsync<StreamingChatMessageContent>(
+                chat,
+                new() {
+                        { "request", message.Content },
+                        { "history", string.Join("\n", chatHistory.Select(x => x.Role + ": " + x.Content)) },
+                        { "cosmosResults", responseCosmos }
+                           }
+                );
+
+        await foreach (var chunk in chatResult)
+        {
+            response += chunk;
+        }
+
+        // Append messages to chat history
+        chatHistory.AddUserMessage(message.Content!);
+        chatHistory.AddAssistantMessage(response);
+
+        // Add messages to list for rendering
+        Messages.Add(new Message { Content = message.Content, IsUser = true });
+        Messages.Add(new Message { Content = response, IsUser = false });
+    }
+}
+
