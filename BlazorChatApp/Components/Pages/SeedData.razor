@@ -1,0 +1,142 @@
+@page "/admin/seed-data"
+@inject Microsoft.Extensions.Configuration.IConfiguration _config
+
+<PageTitle>Data Seeding</PageTitle>
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Cosmos DB Data Seeding</h3>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        This tool will load sample vector data from the local seed-data.json file and seed it into your Cosmos DB container.
+                        The sample data includes technology-related articles about Azure services that will provide a rich dataset for testing the RAG functionality.
+                    </p>
+                    
+                    @if (isSeeding)
+                    {
+                        <div class="d-flex align-items-center">
+                            <div class="spinner-border text-primary me-3" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <span>Seeding data... This may take a few minutes.</span>
+                        </div>
+                        
+                        @if (!string.IsNullOrEmpty(currentStatus))
+                        {
+                            <div class="mt-3">
+                                <div class="alert alert-info">
+                                    @currentStatus
+                                </div>
+                            </div>
+                        }
+                    }
+                    else if (seedingComplete)
+                    {
+                        <div class="alert alert-success">
+                            <h5 class="alert-heading">✅ Data seeding completed successfully!</h5>
+                            <p>Sample vector data has been loaded into your Cosmos DB container. You can now:</p>
+                            <ul>
+                                <li>Go to the <a href="/chat" class="alert-link">Chat page</a> to test the RAG functionality</li>
+                                <li>Ask questions about Azure services like "What is Azure Functions?" or "Tell me about Azure Cosmos DB"</li>
+                            </ul>
+                        </div>
+                    }
+                    else if (hasError)
+                    {
+                        <div class="alert alert-danger">
+                            <h5 class="alert-heading">❌ Error occurred during seeding</h5>
+                            <p>@errorMessage</p>
+                            <p>Please check:</p>
+                            <ul>
+                                <li>Cosmos DB connection is configured correctly</li>
+                                <li>Container app has the required permissions</li>
+                                <li>Database "vectordb" and container "Container3" exist</li>
+                            </ul>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning">
+                            <h5 class="alert-heading">⚠️ Before you start</h5>
+                            <p>Make sure:</p>
+                            <ul>
+                                <li>Your Cosmos DB is properly configured with vector search enabled</li>
+                                <li>The database "vectordb" and container "Container3" exist</li>
+                                <li>The container app has proper permissions to write to Cosmos DB</li>
+                            </ul>
+                        </div>
+                    }
+                </div>
+                <div class="card-footer">
+                    @if (!isSeeding && !seedingComplete)
+                    {
+                        <button class="btn btn-primary" @onclick="StartSeeding" disabled="@isSeeding">
+                            <i class="fas fa-database"></i> Seed Sample Data
+                        </button>
+                    }
+                    
+                    @if (seedingComplete)
+                    {
+                        <a href="/chat" class="btn btn-success">
+                            <i class="fas fa-comments"></i> Try the Chat
+                        </a>
+                        <button class="btn btn-secondary ms-2" @onclick="ResetPage">
+                            <i class="fas fa-redo"></i> Seed Again
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool isSeeding = false;
+    private bool seedingComplete = false;
+    private bool hasError = false;
+    private string errorMessage = string.Empty;
+    private string currentStatus = string.Empty;
+
+    private async Task StartSeeding()
+    {
+        try
+        {
+            isSeeding = true;
+            hasError = false;
+            errorMessage = string.Empty;
+            currentStatus = "Initializing data seeding...";
+            StateHasChanged();
+
+            var seeder = new DataSeeder(_config);
+            await seeder.SeedSampleDataAsync();
+
+            seedingComplete = true;
+            currentStatus = "Data seeding completed successfully!";
+        }
+        catch (Exception ex)
+        {
+            hasError = true;
+            errorMessage = ex.Message;
+            Console.WriteLine($"Seeding error: {ex}");
+        }
+        finally
+        {
+            isSeeding = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ResetPage()
+    {
+        isSeeding = false;
+        seedingComplete = false;
+        hasError = false;
+        errorMessage = string.Empty;
+        currentStatus = string.Empty;
+        StateHasChanged();
+    }
+}
