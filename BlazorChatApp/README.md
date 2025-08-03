@@ -37,32 +37,37 @@ A **Retrieval-Augmented Generation (RAG)** chat application built with **Blazor 
 - **Infrastructure**: Azure Container Apps, Azure Container Registry
 - **IaC**: Bicep templates (modular architecture)
 
-## 🚀 Quick Start with Azure Developer CLI
+## 🚀 Quick Deploy with Azure Developer CLI (azd)
 
-The fastest way to get this application running in Azure:
+**Get this app running in Azure in under 5 minutes:**
 
 ```bash
 # Clone the repository
 git clone https://github.com/Azure-Samples/cosmos-db-rag-chat-aca.git
 cd cosmos-db-rag-chat-aca/BlazorChatApp
 
-# Install Azure Developer CLI if you haven't already
+# Install Azure Developer CLI (if not already installed)
 # Windows: winget install Microsoft.Azd
 # macOS: brew install azure-developer-cli
 # Linux: curl -fsSL https://aka.ms/install-azd.sh | bash
 
-# Login and deploy everything
+# Deploy everything with one command
 azd auth login
 azd up
 ```
 
-That's it! The `azd up` command will:
+**What gets deployed:**
+- ✅ **Azure Cosmos DB** with vector search enabled
+- ✅ **Azure OpenAI** with GPT-4o and text-embedding-ada-002 models
+- ✅ **Azure Container Apps** with managed identity
+- ✅ **Azure Container Registry** for your app
+- ✅ **Complete infrastructure** with secure connections
 
-- ✅ Provision all Azure resources (Cosmos DB, OpenAI with gpt-4o + embedding models, Container Apps)
-- ✅ Build and deploy your application with proper container configuration
-- ✅ Configure secure connections with managed identity (no API keys needed)
-- ✅ Set up all environment variables automatically
-- ✅ Provide you with the application URL when complete
+**After deployment:**
+- Get your app URL with: `azd show`
+- View logs with: `azd logs --follow`
+- Update code with: `azd deploy`
+- Clean up with: `azd down`
 
 ## Prerequisites
 
@@ -163,33 +168,41 @@ For more control over the deployment process:
 # 1. Login to Azure
 azd auth login
 
-# 2. Initialize the project (if not done before)
+# 2. Initialize the project (creates .azure directory)
 azd init
 
 # 3. Provision Azure infrastructure only
 azd provision
 
-# 4. Build and deploy application only
+# 4. Build and deploy application only  
 azd deploy
 
 # 5. View deployment status and get app URL
 azd show
+
+# 6. View environment variables and outputs
+azd env get-values
 ```
 
-### Environment Management
+**Key azd commands:**
 
 ```bash
-# Create a new environment (e.g., for staging)
-azd env new staging
-
-# List all environments
+# Create and switch environments (dev, staging, prod)
+azd env new <environment-name>
+azd env select <environment-name>
 azd env list
 
-# Switch between environments
-azd env select <environment-name>
+# Monitor your application
+azd logs --follow
+azd monitor --overview
 
-# View current environment variables
-azd env get-values
+# Update deployments
+azd deploy              # Deploy code changes only
+azd provision          # Update infrastructure only
+azd up                 # Deploy everything
+
+# Clean up resources
+azd down --purge       # Delete all resources
 ```
 
 ## Manual Azure Container Apps Deployment
@@ -358,6 +371,26 @@ The application uses these configuration sections:
 ## Troubleshooting
 
 ### azd (Azure Developer CLI) Issues
+
+**First time setup:**
+
+```bash
+# Install azd if not already installed
+winget install Microsoft.Azd  # Windows
+# or
+brew install azure-developer-cli  # macOS
+# or  
+curl -fsSL https://aka.ms/install-azd.sh | bash  # Linux
+
+# Verify installation
+azd version
+
+# Login to Azure
+azd auth login
+
+# Check you have the right subscription
+az account show
+```
 
 **azd up fails during provisioning:**
 
