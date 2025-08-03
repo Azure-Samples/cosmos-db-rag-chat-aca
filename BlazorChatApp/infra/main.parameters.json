@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "eastus"
+    },
+    "containerImage": {
+      "value": "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+    },
+    "environmentName": {
+      "value": "prod"
+    },
+    "acrName": {
+      "value": ""
+    },
+    "containerAppName": {
+      "value": ""
+    },
+    "cosmosDbAccountName": {
+      "value": ""
+    },
+    "openAiName": {
+      "value": ""
+    }
+  }
+}

@@ -1,0 +1,281 @@
+# Blazor Cosmos Vector Search - RAG Chat Application
+
+A **Retrieval-Augmented Generation (RAG)** chat application built with **Blazor Server**, **Azure Cosmos DB** vector search, and **Azure OpenAI**. This application demonstrates modern AI-powered chat experiences using hybrid search with Reciprocal Rank Fusion (RRF) for enhanced search accuracy.
+
+## Features
+
+- **AI-Powered Chat**: Integration with Azure OpenAI for intelligent responses
+- **Vector Search**: Azure Cosmos DB vector search with hybrid search capabilities  
+- **Real-time Streaming**: Streaming chat responses for better user experience
+- **Secure Authentication**: Azure Managed Identity for secure service connections
+- **Containerized**: Docker support for easy deployment and scaling
+- **Infrastructure as Code**: Bicep templates for complete Azure resource provisioning
+- **Responsive UI**: Modern Blazor Server interface with real-time updates
+
+## Architecture
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Blazor App    │───▶│  Azure OpenAI    │    │  Azure Cosmos   │
+│  (Container)    │    │   GPT-3.5/4      │    │      DB         │
+└─────────────────┘    └──────────────────┘    │  Vector Search  │
+         │                                      └─────────────────┘
+         │                                              ▲
+         │              ┌──────────────────┐            │
+         └─────────────▶│ Semantic Kernel  │────────────┘
+                        │   Embeddings     │
+                        └──────────────────┘
+```
+
+## Technology Stack
+
+- **Frontend**: Blazor Server (.NET 9.0)
+- **AI/ML**: Azure OpenAI, Semantic Kernel
+- **Database**: Azure Cosmos DB (with vector search)
+- **Authentication**: Azure Managed Identity
+- **Containerization**: Docker
+- **Infrastructure**: Azure Container Apps, Azure Container Registry
+- **IaC**: Bicep templates (modular architecture)
+
+## Prerequisites
+
+- **Docker Desktop** installed and running
+- **Azure CLI** installed and logged in
+- **Azure subscription** with access to:
+  - Azure Cosmos DB (with vector search enabled)
+  - Azure OpenAI Service
+  - Azure Container Registry
+  - Azure Container Apps
+
+## Local Development with Docker
+
+### 1. Configure Application Settings
+
+Update `BlazorChatApp/appsettings.json` with your Azure service configurations:
+
+```json
+{
+  "COSMOS_DB": {
+    "ENDPOINT_DB": "https://your-cosmos-db.documents.azure.com:443/"
+  },
+  "OpenAI": {
+    "DEPLOYMENT_NAME": "gpt-35-turbo",
+    "ENDPOINT": "https://your-openai.openai.azure.com/",
+    "API_KEY": "your-api-key",
+    "MODEL_ID": "gpt-35-turbo"
+  }
+}
+```
+
+### 2. Build and Run Docker Container
+
+```bash
+# Navigate to the BlazorChatApp directory
+cd BlazorChatApp
+
+# Build the Docker image
+docker build -t blazor-chat-app .
+
+# Run the container
+docker run -d -p 8080:8080 --name blazor-chat-container blazor-chat-app
+
+# Check if container is running
+docker ps
+```
+
+### 3. Access the Application
+
+- **Main Application**: http://localhost:8080
+- **Chat Interface**: http://localhost:8080/chat
+
+### 4. Stop and Clean Up
+
+```bash
+# Stop and remove container
+docker stop blazor-chat-container
+docker rm blazor-chat-container
+
+# Remove image (optional)
+docker rmi blazor-chat-app
+```
+
+## Azure Container Apps Deployment
+
+### 1. Deploy Infrastructure
+
+```bash
+# Deploy Azure resources using Bicep
+az deployment group create \
+  --resource-group <your-resource-group-name> \
+  --template-file BlazorChatApp/infra/main.bicep \
+  --parameters containerImage='mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+```
+
+### 2. Build and Push Application Image
+
+```bash
+# Get deployment outputs
+ACR_NAME=$(az deployment group show --resource-group <your-resource-group-name> --name main --query properties.outputs.acrName.value -o tsv)
+ACR_LOGIN_SERVER=$(az deployment group show --resource-group <your-resource-group-name> --name main --query properties.outputs.acrLoginServer.value -o tsv)
+
+# Login to Azure Container Registry
+az acr login --name $ACR_NAME
+
+# Navigate to app directory and build/push image
+cd BlazorChatApp
+docker build -t $ACR_LOGIN_SERVER/blazor-cosmos-chat:latest .
+docker push $ACR_LOGIN_SERVER/blazor-cosmos-chat:latest
+```
+
+### 3. Update Container App
+
+```bash
+# Get container app name
+CONTAINER_APP_NAME=$(az deployment group show --resource-group <your-resource-group-name> --name main --query properties.outputs.containerAppName.value -o tsv)
+
+# Update container app with your image
+az containerapp update \
+  --name $CONTAINER_APP_NAME \
+  --resource-group <your-resource-group-name> \
+  --image $ACR_LOGIN_SERVER/blazor-cosmos-chat:latest
+```
+
+### 4. Configure Managed Identity Access
+
+**Important**: Configure Managed Identity for secure Cosmos DB access:
+
+```bash
+# Get the container app's managed identity principal ID
+PRINCIPAL_ID=$(az containerapp identity show --name $CONTAINER_APP_NAME --resource-group <your-resource-group-name> --query principalId -o tsv)
+
+# Assign Cosmos DB Built-in Data Contributor role
+az cosmosdb sql role assignment create \
+  --account-name <your-cosmos-db-account-name> \
+  --resource-group <your-resource-group-name> \
+  --scope "/" \
+  --principal-id $PRINCIPAL_ID \
+  --role-definition-id "00000000-0000-0000-0000-000000000002"
+```
+
+> **Note**: The role definition ID `00000000-0000-0000-0000-000000000002` corresponds to the "Cosmos DB Built-in Data Contributor" role, which provides read and write access to Cosmos DB data.
+
+### 5. Get Application URL
+
+```bash
+# Get the application URL
+FQDN=$(az deployment group show --resource-group <your-resource-group-name> --name main --query properties.outputs.containerAppFqdn.value -o tsv)
+echo "Your application is available at: https://$FQDN"
+echo "Chat interface: https://$FQDN/chat"
+```
+
+## Project Structure
+
+```
+BlazorChatApp/
+├── Components/
+│   ├── Layout/              # Layout components
+│   ├── Pages/
+│   │   ├── Chat.razor       # Main chat interface with RAG implementation
+│   │   └── ...
+│   └── _Imports.razor       # Global using statements
+├── infra/                   # Infrastructure as Code
+│   ├── main.bicep          # Main Bicep template
+│   └── modules/
+│       ├── container-app.bicep    # Container Apps configuration
+│       ├── cosmos-db.bicep        # Cosmos DB setup
+│       └── openai.bicep           # Azure OpenAI configuration
+├── Dockerfile              # Multi-stage Docker build
+├── appsettings.json        # Application configuration
+└── deploy-steps.md         # Detailed deployment guide
+```
+
+## Configuration
+
+### Required Azure Services
+
+1. **Azure Cosmos DB**
+   - Database: `vectordb`
+   - Container: `Container3`
+   - Vector search enabled
+   - Indexing policy configured for vector fields
+
+2. **Azure OpenAI**
+   - GPT model deployment (e.g., `gpt-35-turbo`)
+   - Text embedding model: `text-embedding-ada-002`
+
+3. **Azure Container Apps Environment**
+   - Container registry integration
+   - Managed identity enabled
+
+### Environment Variables
+
+The application uses these configuration sections:
+
+- `COSMOS_DB:ENDPOINT_DB` - Cosmos DB endpoint URL
+- `OpenAI:DEPLOYMENT_NAME` - Azure OpenAI deployment name
+- `OpenAI:ENDPOINT` - Azure OpenAI endpoint URL
+- `OpenAI:API_KEY` - Azure OpenAI API key (for local development)
+- `OpenAI:MODEL_ID` - Model identifier
+
+## Security Best Practices
+
+- **Managed Identity**: Used for secure authentication to Azure services
+- **No hardcoded secrets**: API keys only used for local development
+- **Role-based access**: Cosmos DB access via built-in data contributor role
+- **Container security**: Multi-stage Docker builds for optimized images
+
+## How It Works
+
+1. **User Input**: User submits a question through the chat interface
+2. **Embedding Generation**: Question is converted to vector embedding using Azure OpenAI
+3. **Hybrid Search**: Cosmos DB performs vector similarity search + full-text search using RRF
+4. **Context Retrieval**: Relevant documents are retrieved and used as context
+5. **AI Response**: Azure OpenAI generates response using retrieved context
+6. **Streaming**: Response is streamed back to user in real-time
+
+## Troubleshooting
+
+### Common Issues
+
+**Container App won't start:**
+- Check if the container image exists in ACR
+- Verify managed identity permissions for Cosmos DB
+- Review container app logs: `az containerapp logs show --name $CONTAINER_APP_NAME --resource-group <your-resource-group-name> --follow`
+
+**Chat not working:**
+- Ensure Cosmos DB connection is configured
+- Verify Azure OpenAI deployment is accessible
+- Check that database `vectordb` and container `Container3` exist
+
+**Local Docker issues:**
+- Verify Docker Desktop is running
+- Check port 8080 is not in use
+- Review container logs: `docker logs blazor-chat-container`
+
+### Monitor Deployment
+
+```bash
+# Check container app status
+az containerapp show --name $CONTAINER_APP_NAME --resource-group <your-resource-group-name> --query "properties.provisioningState"
+
+# View application logs
+az containerapp logs show --name $CONTAINER_APP_NAME --resource-group <your-resource-group-name> --follow
+
+# Check if the app is healthy
+curl -I https://$FQDN
+```
+
+## Additional Resources
+
+- [Azure Cosmos DB Vector Search Documentation](https://docs.microsoft.com/azure/cosmos-db/vector-search)
+- [Azure OpenAI Service Documentation](https://docs.microsoft.com/azure/cognitive-services/openai/)
+- [Azure Container Apps Documentation](https://docs.microsoft.com/azure/container-apps/)
+- [Semantic Kernel Documentation](https://learn.microsoft.com/semantic-kernel/)
+
+## Contributing
+
+This is an Azure Sample. Contributions are welcome! Please feel free to submit issues and pull requests.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

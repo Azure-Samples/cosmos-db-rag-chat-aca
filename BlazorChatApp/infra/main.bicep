@@ -1,17 +1,20 @@
-@description('Name of the Azure Container Registry')
-param acrName string = 'blazorchataacr${uniqueString(resourceGroup().id)}'
-
-@description('Name of the Container App')
-param containerAppName string = 'blazorchataapp${uniqueString(resourceGroup().id)}'
-
 @description('Location for all resources')
 param location string = resourceGroup().location
 
 @description('Container image to deploy - defaults to hello-world for initial deployment')
 param containerImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
+@description('Environment name (e.g., dev, prod)')
+param environmentName string = 'dev'
+
+@description('Name of the Azure Container Registry')
+param acrName string = ''
+
+@description('Name of the Container App')
+param containerAppName string = ''
+
 @description('Name of the Cosmos DB account')
-param cosmosDbAccountName string = 'blazorchat-cosmos-${uniqueString(resourceGroup().id)}'
+param cosmosDbAccountName string = ''
 
 @description('Name of the Cosmos DB database')
 param cosmosDbDatabaseName string = 'ChatDatabase'
@@ -20,11 +23,33 @@ param cosmosDbDatabaseName string = 'ChatDatabase'
 param cosmosDbContainerName string = 'ChatMessages'
 
 @description('Name of the Azure OpenAI service')
-param openAiName string = 'blazorchat-openai-${uniqueString(resourceGroup().id)}'
+param openAiName string = ''
+
+// Resource token for consistent naming
+var resourceToken = uniqueString(subscription().id, resourceGroup().id, location, environmentName)
+
+// Computed resource names if not provided
+var actualAcrName = !empty(acrName) ? acrName : 'blazorchataacr${resourceToken}'
+var actualContainerAppName = !empty(containerAppName) ? containerAppName : 'blazorchataapp${resourceToken}'
+var actualCosmosDbAccountName = !empty(cosmosDbAccountName) ? cosmosDbAccountName : 'blazorchat-cosmos-${resourceToken}'
+var actualOpenAiName = !empty(openAiName) ? openAiName : 'blazorchat-openai-${resourceToken}'
+
+// Target scope and tags
+targetScope = 'resourceGroup'
+
+// Add required tags for the resource group
+resource resourceGroupTags 'Microsoft.Resources/tags@2021-04-01' = {
+  name: 'default'
+  properties: {
+    tags: {
+      'azd-env-name': environmentName
+    }
+  }
+}
 
 // User-assigned managed identity for Container App
 resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: 'blazorchat-identity-${uniqueString(resourceGroup().id)}'
+  name: 'blazorchat-identity-${resourceToken}'
   location: location
 }
 
@@ -34,15 +59,18 @@ module containerApp 'modules/container-app.bicep' = {
   params: {
     location: location
     containerImage: containerImage
-    acrName: acrName
-    containerAppName: containerAppName
+    acrName: actualAcrName
+    containerAppName: actualContainerAppName
     userAssignedIdentityId: userAssignedIdentity.id
     userAssignedIdentityPrincipalId: userAssignedIdentity.properties.principalId
     userAssignedIdentityClientId: userAssignedIdentity.properties.clientId
-    cosmosDbAccountName: cosmosDbAccountName
+    cosmosDbAccountName: actualCosmosDbAccountName
     cosmosDbDatabaseName: cosmosDbDatabaseName
     cosmosDbContainerName: cosmosDbContainerName
-    openAiName: openAiName
+    openAiName: actualOpenAiName
+    openAiChatDeploymentName: openAi.outputs.chatDeploymentName
+    openAiEmbeddingDeploymentName: openAi.outputs.embeddingDeploymentName
+    openAiEndpoint: openAi.outputs.endpoint
   }
 }
 
@@ -51,7 +79,7 @@ module cosmosDb 'modules/cosmos-db.bicep' = {
   name: 'cosmosdb-deployment'
   params: {
     location: location
-    cosmosDbAccountName: cosmosDbAccountName
+    cosmosDbAccountName: actualCosmosDbAccountName
     cosmosDbDatabaseName: cosmosDbDatabaseName
     cosmosDbContainerName: cosmosDbContainerName
   }
@@ -62,13 +90,13 @@ module openAi 'modules/openai.bicep' = {
   name: 'openai-deployment'
   params: {
     location: location
-    openAiName: openAiName
+    openAiName: actualOpenAiName
   }
 }
 
 // Grant Container App managed identity access to Cosmos DB
 resource cosmosDbRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(cosmosDbAccountName, userAssignedIdentity.id, '5bd9cd88-fe45-4216-938b-f97437e15450')
+  name: guid(actualCosmosDbAccountName, userAssignedIdentity.id, '5bd9cd88-fe45-4216-938b-f97437e15450')
   scope: resourceGroup()
   properties: {
     principalId: userAssignedIdentity.properties.principalId
@@ -82,7 +110,7 @@ resource cosmosDbRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04
 
 // Grant Container App managed identity access to OpenAI
 resource openAiRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(openAiName, userAssignedIdentity.id, 'a97b65f3-24c7-4388-baec-2e87135dc908')
+  name: guid(actualOpenAiName, userAssignedIdentity.id, 'a97b65f3-24c7-4388-baec-2e87135dc908')
   scope: resourceGroup()
   properties: {
     principalId: userAssignedIdentity.properties.principalId
@@ -98,7 +126,14 @@ output containerAppFqdn string = containerApp.outputs.containerAppFqdn
 output acrLoginServer string = containerApp.outputs.acrLoginServer
 output acrName string = containerApp.outputs.acrName
 output containerAppName string = containerApp.outputs.containerAppName
-output cosmosDbAccountName string = cosmosDbAccountName
+output cosmosDbAccountName string = actualCosmosDbAccountName
 output cosmosDbDatabaseName string = cosmosDbDatabaseName
 output cosmosDbContainerName string = cosmosDbContainerName
-output openAiName string = openAiName
+output openAiName string = actualOpenAiName
+output openAiEndpoint string = openAi.outputs.endpoint
+output openAiChatDeploymentName string = openAi.outputs.chatDeploymentName
+output openAiEmbeddingDeploymentName string = openAi.outputs.embeddingDeploymentName
+
+// Required outputs for deployment
+output RESOURCE_GROUP_ID string = resourceGroup().id
+output AZURE_CONTAINER_REGISTRY_ENDPOINT string = containerApp.outputs.acrLoginServer

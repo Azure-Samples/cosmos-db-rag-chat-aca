@@ -9,6 +9,9 @@ param cosmosDbAccountName string
 param cosmosDbDatabaseName string
 param cosmosDbContainerName string
 param openAiName string
+param openAiChatDeploymentName string
+param openAiEmbeddingDeploymentName string
+param openAiEndpoint string
 
 resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: acrName
@@ -60,6 +63,9 @@ resource containerEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: containerAppName
   location: location
+  tags: {
+    'azd-service-name': 'web'
+  }
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
@@ -73,6 +79,12 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         external: true
         targetPort: 8080
         transport: 'auto'
+        corsPolicy: {
+          allowedOrigins: ['*']
+          allowedMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+          allowedHeaders: ['*']
+          allowCredentials: false
+        }
       }
       registries: [
         {
@@ -102,6 +114,18 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'OPENAI_SERVICE_NAME'
               value: openAiName
+            }
+            {
+              name: 'OPENAI_ENDPOINT'
+              value: openAiEndpoint
+            }
+            {
+              name: 'OPENAI_CHAT_DEPLOYMENT_NAME'
+              value: openAiChatDeploymentName
+            }
+            {
+              name: 'OPENAI_EMBEDDING_DEPLOYMENT_NAME'
+              value: openAiEmbeddingDeploymentName
             }
             {
               name: 'AZURE_CLIENT_ID'
