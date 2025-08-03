@@ -17,10 +17,10 @@ param containerAppName string = ''
 param cosmosDbAccountName string = ''
 
 @description('Name of the Cosmos DB database')
-param cosmosDbDatabaseName string = 'ChatDatabase'
+param cosmosDbDatabaseName string = 'vectordb'
 
 @description('Name of the Cosmos DB container')
-param cosmosDbContainerName string = 'ChatMessages'
+param cosmosDbContainerName string = 'Container3'
 
 @description('Name of the Azure OpenAI service')
 param openAiName string = ''
@@ -94,18 +94,23 @@ module openAi 'modules/openai.bicep' = {
   }
 }
 
-// Grant Container App managed identity access to Cosmos DB
-resource cosmosDbRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(actualCosmosDbAccountName, userAssignedIdentity.id, '5bd9cd88-fe45-4216-938b-f97437e15450')
-  scope: resourceGroup()
-  properties: {
-    principalId: userAssignedIdentity.properties.principalId
-    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', '5bd9cd88-fe45-4216-938b-f97437e15450') // DocumentDB Account Contributor
-    principalType: 'ServicePrincipal'
-  }
+// Reference to the Cosmos DB account for role assignment
+resource cosmosDbAccount 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' existing = {
+  name: actualCosmosDbAccountName
   dependsOn: [
     cosmosDb
   ]
+}
+
+// Grant Container App managed identity access to Cosmos DB
+resource cosmosDbRoleAssignment 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-11-15' = {
+  name: guid(actualCosmosDbAccountName, userAssignedIdentity.id, '00000000-0000-0000-0000-000000000002')
+  parent: cosmosDbAccount
+  properties: {
+    principalId: userAssignedIdentity.properties.principalId
+    roleDefinitionId: '${cosmosDbAccount.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002'
+    scope: cosmosDbAccount.id
+  }
 }
 
 // Grant Container App managed identity access to OpenAI

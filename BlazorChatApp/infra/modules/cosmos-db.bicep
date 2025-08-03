@@ -59,7 +59,7 @@ resource container 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/container
       vectorEmbeddingPolicy: {
         vectorEmbeddings: [
           {
-            path: '/embedding'
+            path: '/titleVector'
             dataType: 'float32'
             distanceFunction: 'cosine'
             dimensions: 1536  // Standard OpenAI embedding dimension
@@ -78,3 +78,4 @@ output accountName string = cosmosDb.name
 output databaseName string = db.name
 output containerName string = container.name
 output endpoint string = cosmosDb.properties.documentEndpoint
+output cosmosDbAccount object = cosmosDb
