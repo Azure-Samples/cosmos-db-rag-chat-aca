@@ -37,6 +37,31 @@ A **Retrieval-Augmented Generation (RAG)** chat application built with **Blazor 
 - **Infrastructure**: Azure Container Apps, Azure Container Registry
 - **IaC**: Bicep templates (modular architecture)
 
+## 🚀 Quick Start with Azure Developer CLI
+
+The fastest way to get this application running in Azure:
+
+```bash
+# Clone the repository
+git clone https://github.com/Azure-Samples/cosmos-db-rag-chat-aca.git
+cd cosmos-db-rag-chat-aca/BlazorChatApp
+
+# Install Azure Developer CLI if you haven't already
+# Windows: winget install Microsoft.Azd
+# macOS: brew install azure-developer-cli
+# Linux: curl -fsSL https://aka.ms/install-azd.sh | bash
+
+# Login and deploy everything
+azd auth login
+azd up
+```
+
+That's it! The `azd up` command will:
+- ✅ Provision all Azure resources (Cosmos DB, OpenAI with models, Container Apps)
+- ✅ Build and deploy your application
+- ✅ Configure secure connections with managed identity
+- ✅ Provide you with the application URL
+
 ## Prerequisites
 
 - **Docker Desktop** installed and running
@@ -99,7 +124,77 @@ docker rm blazor-chat-container
 docker rmi blazor-chat-app
 ```
 
-## Azure Container Apps Deployment
+## Azure Deployment with Azure Developer CLI (azd)
+
+### Prerequisites
+
+- **Azure Developer CLI (azd)** installed ([Installation Guide](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd))
+- **Azure CLI** installed and logged in
+- **Docker Desktop** running (for container image building)
+
+### Option 1: Quick Deployment with azd (Recommended)
+
+This is the fastest way to deploy the complete application with all Azure resources:
+
+```bash
+# 1. Navigate to the project directory
+cd BlazorChatApp
+
+# 2. Initialize azd (first time only)
+azd auth login
+azd init
+
+# 3. Deploy everything (infrastructure + application)
+azd up
+```
+
+The `azd up` command will:
+- ✅ Provision all Azure resources (Cosmos DB, OpenAI, Container Apps, etc.)
+- ✅ Build and containerize your application
+- ✅ Deploy the container to Azure Container Apps
+- ✅ Configure all environment variables and connections
+- ✅ Set up managed identity authentication
+
+### Option 2: Step-by-Step azd Deployment
+
+For more control over the deployment process:
+
+```bash
+# 1. Login to Azure
+azd auth login
+
+# 2. Initialize the project (if not done before)
+azd init
+
+# 3. Provision Azure infrastructure only
+azd provision
+
+# 4. Build and deploy application only
+azd deploy
+
+# 5. View deployment status and get app URL
+azd show
+```
+
+### Environment Management
+
+```bash
+# Create a new environment (e.g., for staging)
+azd env new staging
+
+# List all environments
+azd env list
+
+# Switch between environments
+azd env select <environment-name>
+
+# View current environment variables
+azd env get-values
+```
+
+## Manual Azure Container Apps Deployment
+
+If you prefer manual deployment or need more customization:
 
 ### 1. Deploy Infrastructure
 
@@ -107,8 +202,8 @@ docker rmi blazor-chat-app
 # Deploy Azure resources using Bicep
 az deployment group create \
   --resource-group <your-resource-group-name> \
-  --template-file BlazorChatApp/infra/main.bicep \
-  --parameters containerImage='mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+  --template-file infra/main.bicep \
+  --parameters environmentName=dev location=eastus
 ```
 
 ### 2. Build and Push Application Image
@@ -180,13 +275,59 @@ BlazorChatApp/
 │   └── _Imports.razor       # Global using statements
 ├── infra/                   # Infrastructure as Code
 │   ├── main.bicep          # Main Bicep template
+│   ├── main.parameters.json # Deployment parameters
 │   └── modules/
 │       ├── container-app.bicep    # Container Apps configuration
 │       ├── cosmos-db.bicep        # Cosmos DB setup
 │       └── openai.bicep           # Azure OpenAI configuration
+├── azure.yaml              # Azure Developer CLI configuration
 ├── Dockerfile              # Multi-stage Docker build
 ├── appsettings.json        # Application configuration
 └── deploy-steps.md         # Detailed deployment guide
+```
+
+## Azure Developer CLI Configuration
+
+This project includes `azure.yaml` which configures azd for seamless deployment:
+
+```yaml
+# azure.yaml
+name: blazor-cosmos-chat
+services:
+  web:
+    project: .
+    language: dotnet
+    host: containerapp
+    docker:
+      path: ./Dockerfile
+infra:
+  provider: bicep
+  path: infra
+```
+
+### Key azd Features Enabled
+
+- **Infrastructure as Code**: Uses Bicep templates in `/infra` folder
+- **Container Building**: Automatically builds Docker images
+- **Service Deployment**: Deploys to Azure Container Apps
+- **Environment Management**: Supports multiple environments (dev, staging, prod)
+- **Managed Identity**: Automatically configures secure service connections
+
+### Customizing Deployment
+
+You can customize the deployment by modifying `infra/main.parameters.json`:
+
+```json
+{
+  "parameters": {
+    "location": {
+      "value": "eastus"
+    },
+    "environmentName": {
+      "value": "dev"
+    }
+  }
+}
 ```
 
 ## Configuration
@@ -235,24 +376,90 @@ The application uses these configuration sections:
 
 ## Troubleshooting
 
+### azd (Azure Developer CLI) Issues
+
+**azd up fails during provisioning:**
+
+```bash
+# View detailed logs
+azd provision --debug
+
+# Check current environment
+azd env get-values
+
+# Verify Azure CLI login
+az account show
+
+# Check resource quotas in target region
+az vm list-usage --location eastus
+```
+
+**azd deploy fails:**
+
+```bash
+# View deployment logs
+azd deploy --debug
+
+# Check container app status
+azd show
+
+# Rebuild and redeploy
+azd package
+azd deploy
+```
+
+**Environment management issues:**
+
+```bash
+# List all environments
+azd env list
+
+# Reset current environment
+azd down
+azd up
+
+# Create fresh environment
+azd env new <new-env-name>
+azd env select <new-env-name>
+azd up
+```
+
 ### Common Issues
 
 **Container App won't start:**
+
 - Check if the container image exists in ACR
 - Verify managed identity permissions for Cosmos DB
-- Review container app logs: `az containerapp logs show --name $CONTAINER_APP_NAME --resource-group <your-resource-group-name> --follow`
+- Review container app logs: `azd show` then check the provided URL
 
 **Chat not working:**
+
 - Ensure Cosmos DB connection is configured
-- Verify Azure OpenAI deployment is accessible
-- Check that database `vectordb` and container `Container3` exist
+- Verify Azure OpenAI deployment is accessible  
+- Check that database `ChatDatabase` and container `ChatMessages` exist
 
 **Local Docker issues:**
+
 - Verify Docker Desktop is running
 - Check port 8080 is not in use
 - Review container logs: `docker logs blazor-chat-container`
 
 ### Monitor Deployment
+
+#### Using azd commands:
+
+```bash
+# Get application URL and status
+azd show
+
+# View environment variables
+azd env get-values
+
+# Check deployment logs
+azd show --output json
+```
+
+#### Using Azure CLI:
 
 ```bash
 # Check container app status
@@ -263,6 +470,31 @@ az containerapp logs show --name $CONTAINER_APP_NAME --resource-group <your-reso
 
 # Check if the app is healthy
 curl -I https://$FQDN
+```
+
+### Useful azd Commands
+
+```bash
+# Get help for any azd command
+azd <command> --help
+
+# View current project status
+azd show
+
+# Update only the application (skip infrastructure)
+azd deploy
+
+# Update only infrastructure
+azd provision
+
+# Clean up all resources
+azd down
+
+# View all logs
+azd monitor --logs
+
+# Open Azure portal for current resources
+azd monitor --overview
 ```
 
 ## Additional Resources
