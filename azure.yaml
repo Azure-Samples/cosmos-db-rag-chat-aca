@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: blazor-cosmos-chat
+metadata:
+  template: blazor-cosmos-chat-aca@0.0.1
+services:
+  web:
+    project: ./BlazorChatApp
+    language: dotnet
+    host: containerapp
+    docker:
+      path: ./BlazorChatApp/Dockerfile
+infra:
+  provider: bicep
+  path: ./BlazorChatApp/infra
