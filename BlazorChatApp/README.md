@@ -2,6 +2,51 @@
 
 A **Retrieval-Augmented Generation (RAG)** chat application built with **Blazor Server**, **Azure Cosmos DB** vector search, and **Azure OpenAI**. This application demonstrates modern AI-powered chat experiences using hybrid search capabilities.
 
+## 💬 What This App Does
+
+This application creates an intelligent chat interface that can answer questions about technology topics using a combination of vector search and generative AI. The app comes pre-loaded with **108 technology articles** covering diverse topics to demonstrate RAG capabilities.
+
+### 📚 Sample Data Content
+
+The application includes comprehensive articles on:
+- **Cloud Computing**: Azure services, AWS, Google Cloud Platform
+- **Databases**: SQL, NoSQL, Vector databases, Azure Cosmos DB
+- **AI & Machine Learning**: OpenAI, Azure AI services, ML frameworks
+- **Web Development**: React, Angular, .NET, JavaScript frameworks
+- **DevOps & Infrastructure**: Docker, Kubernetes, CI/CD, Infrastructure as Code
+- **Programming Languages**: Python, C#, JavaScript, Go, Rust
+- **Data Engineering**: Data pipelines, ETL, Analytics
+- **Security**: Authentication, encryption, best practices
+
+### 🤔 Questions You Can Ask
+
+**Cloud & Azure Topics**:
+- "What is Azure Cosmos DB and what are its key features?"
+- "How does Azure Functions work for serverless computing?"
+- "What are the differences between Azure Container Instances and Container Apps?"
+
+**Development & Programming**:
+- "What are the benefits of using React for web development?"
+- "How do you implement authentication in .NET applications?"
+- "What are the key differences between SQL and NoSQL databases?"
+
+**AI & Machine Learning**:
+- "How does vector search work in databases?"
+- "What is the difference between supervised and unsupervised learning?"
+- "How can I integrate OpenAI APIs into my application?"
+
+**DevOps & Infrastructure**:
+- "What are the advantages of containerization with Docker?"
+- "How do you set up a CI/CD pipeline?"
+- "What is Infrastructure as Code and why is it important?"
+
+**Data & Analytics**:
+- "What are the best practices for data pipeline design?"
+- "How do you handle real-time data processing?"
+- "What tools are available for data visualization?"
+
+The application demonstrates the power of **Retrieval-Augmented Generation (RAG)**, where AI responses are grounded in specific, relevant documents rather than relying solely on the model's training data.
+
 ## ✨ Features
 
 - **AI-Powered Chat**: Integration with Azure OpenAI for intelligent responses
