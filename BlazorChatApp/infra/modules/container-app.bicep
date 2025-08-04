@@ -8,7 +8,6 @@ param userAssignedIdentityClientId string
 param cosmosDbAccountName string
 param cosmosDbDatabaseName string
 param cosmosDbContainerName string
-param openAiName string
 param openAiChatDeploymentName string
 param openAiEmbeddingDeploymentName string
 param openAiEndpoint string
@@ -100,8 +99,12 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           image: containerImage  // Use parameter for flexible deployment
           env: [
             {
-              name: 'COSMOSDB_ACCOUNT_NAME'
-              value: cosmosDbAccountName
+              name: 'AZURE_CLIENT_ID'
+              value: userAssignedIdentityClientId
+            }
+            {
+              name: 'COSMOS_DB__ENDPOINT_DB'
+              value: 'https://${cosmosDbAccountName}.documents.azure.com:443/'
             }
             {
               name: 'COSMOSDB_DATABASE_NAME'
@@ -112,12 +115,16 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
               value: cosmosDbContainerName
             }
             {
-              name: 'OPENAI_SERVICE_NAME'
-              value: openAiName
+              name: 'OpenAI__ENDPOINT'
+              value: openAiEndpoint
             }
             {
-              name: 'OPENAI_ENDPOINT'
-              value: openAiEndpoint
+              name: 'OpenAI__DEPLOYMENT_NAME'
+              value: openAiChatDeploymentName
+            }
+            {
+              name: 'OpenAI__MODEL_ID'
+              value: openAiChatDeploymentName
             }
             {
               name: 'OPENAI_CHAT_DEPLOYMENT_NAME'
@@ -126,10 +133,6 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'OPENAI_EMBEDDING_DEPLOYMENT_NAME'
               value: openAiEmbeddingDeploymentName
-            }
-            {
-              name: 'AZURE_CLIENT_ID'
-              value: userAssignedIdentityClientId
             }
           ]
           resources: {

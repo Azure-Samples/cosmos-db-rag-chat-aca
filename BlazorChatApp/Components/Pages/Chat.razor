@@ -1,8 +1,64 @@
 ﻿@page "/chat"
 @rendermode InteractiveServer
 @inject Microsoft.Extensions.Configuration.IConfiguration _config
+@inject IJSRuntime JSRuntime
+@using Azure.AI.OpenAI
+@using Azure.Identity
+@using Azure
+@using OpenAI.Chat
+@using Microsoft.AspNetCore.Components.Web
 
 <PageTitle>Chat</PageTitle>
+
+<style>
+    .typing-indicator {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-style: italic;
+        color: #666;
+    }
+
+    .typing-text {
+        font-size: 14px;
+    }
+
+    .typing-dots {
+        display: flex;
+        gap: 4px;
+    }
+
+    .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background-color: #999;
+        animation: typing 1.4s infinite ease-in-out;
+    }
+
+    .dot:nth-child(1) {
+        animation-delay: 0s;
+    }
+
+    .dot:nth-child(2) {
+        animation-delay: 0.2s;
+    }
+
+    .dot:nth-child(3) {
+        animation-delay: 0.4s;
+    }
+
+    @@keyframes typing {
+        0%, 60%, 100% {
+            transform: translateY(0);
+            opacity: 0.4;
+        }
+        30% {
+            transform: translateY(-10px);
+            opacity: 1;
+        }
+    }
+</style>
 
 <h1>Chat</h1>
 
@@ -28,9 +84,28 @@
                 }
             </div>
         }
+        
+        @* Typing bubble indicator *@
+        @if (isLoading)
+        {
+            <div class="w-100 d-flex flex-column">
+                <div class="p-2 rounded w-100 d-flex justify-content-start" style="background-color: #f9f9f9; margin-bottom: 2%">
+                    <div class="typing-indicator">
+                        <span class="typing-text">AI is thinking</span>
+                        <div class="typing-dots">
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
     </div>
     <div class="sticky-bottom w-100 p-2 rounded mx-auto dflex row">
-        <textarea class="form-control w-75 col-2" rows="1" @bind="message.Content">
+        <textarea @ref="textareaRef" class="form-control w-75 col-2" rows="1" @bind="message.Content" 
+                  @onkeydown="HandleKeyDown" @onkeydown:preventDefault="preventDefaultEnter"
+                  placeholder="Type your message here...">
         </textarea>
         <button class="btn btn-primary ml-auto col-3" style="float: right" @onclick="SemanticKernelClient">Send Request</button>
     </div>
@@ -51,6 +126,9 @@
     public List<Message> Messages { get; set; } = new List<Message>();
 
     public Message message { get; set; } = new Message();
+
+    private ElementReference textareaRef;
+    private bool isLoading = false;
 
     public record Product(
         string id,
@@ -76,41 +154,84 @@
 
     ChatHistory chatHistory = new("""You are a helpful assistant that answers questions about my Cosmos DB data""");
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Simple approach: prevent Enter default behavior only when needed
+            await JSRuntime.InvokeVoidAsync("eval", @"
+                // Override the global behavior to prevent interference
+                window.preventDefault = function() {};
+            ");
+        }
+    }
+
+    private bool preventDefaultEnter = false;
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        // Submit on Enter, but allow Shift+Enter for new lines
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            preventDefaultEnter = true;
+            await SemanticKernelClient();
+        }
+        else
+        {
+            preventDefaultEnter = false;
+        }
+    }
+
     private async Task SemanticKernelClient()
     {
-        // reset the response variables
-        responseCosmos = " ";
-        response = " ";
+        string currentMessage = string.Empty;
+        try
+        {
+            // Don't process empty messages
+            if (string.IsNullOrWhiteSpace(message.Content))
+            {
+                return;
+            }
 
-        // Azure OpenAI app settings
-        string deploymentName = _config["OpenAI:DEPLOYMENT_NAME"] ?? throw new InvalidOperationException("OpenAI:DEPLOYMENT_NAME not configured");
-        string endpoint = _config["OpenAI:ENDPOINT"] ?? throw new InvalidOperationException("OpenAI:ENDPOINT not configured");
-        string apiKey = _config["OpenAI:API_KEY"] ?? throw new InvalidOperationException("OpenAI:API_KEY not configured");
-        string modelId = _config["OpenAI:MODEL_ID"] ?? throw new InvalidOperationException("OpenAI:MODEL_ID not configured");
+            // Set loading state
+            isLoading = true;
+            StateHasChanged();
 
-        // Semantic Kernel builder
-        var builder = Kernel.CreateBuilder();
+            // Store the message content before clearing
+            currentMessage = message.Content;
+            
+            // Clear the input field immediately for better UX
+            message.Content = string.Empty;
+            
+            // Reset the response variables
+            responseCosmos = " ";
+            response = " ";
 
-        // Chat completion service - local development
-        builder.Services.AddAzureOpenAIChatCompletion(
-             deploymentName: deploymentName,
-             endpoint: endpoint,
-             apiKey: apiKey,
-             modelId: modelId
-         );
-
-        // Chat completion service - Managed Identity
-        @* builder.Services.AddAzureOpenAIChatCompletion(
-            deploymentName: deploymentName,
-            endpoint: endpoint,
-            credentials: new DefaultAzureCredential()
-        ); *@
-
-        var kernel = builder.Build();
+        // Azure OpenAI app settings with fallback for deployed vs local environments
+        string deploymentName = _config["OpenAI:DEPLOYMENT_NAME"] ?? 
+                               _config["OpenAI__DEPLOYMENT_NAME"] ?? 
+                               _config["OPENAI_CHAT_DEPLOYMENT_NAME"] ?? 
+                               throw new InvalidOperationException("OpenAI deployment name not configured");
+                               
+        string endpoint = _config["OpenAI:ENDPOINT"] ?? 
+                         _config["OpenAI__ENDPOINT"] ?? 
+                         throw new InvalidOperationException("OpenAI endpoint not configured");
+        
+        string modelId = _config["OpenAI:MODEL_ID"] ?? 
+                        _config["OpenAI__MODEL_ID"] ?? 
+                        deploymentName; // Use deployment name as model ID if not specified
 
         #region CosmosDB
+        // Get endpoint from configuration - try the new format first, then fall back to old
+        var cosmosEndpoint = _config["COSMOS_DB:ENDPOINT_DB"] ?? _config["COSMOS_DB__ENDPOINT_DB"];
+        
+        if (string.IsNullOrEmpty(cosmosEndpoint))
+        {
+            throw new InvalidOperationException("Cosmos DB endpoint not found in configuration");
+        }
+        
         CosmosClient client = new(
-            accountEndpoint: _config["COSMOS_DB:ENDPOINT_DB"],
+            accountEndpoint: cosmosEndpoint,
             tokenCredential: new DefaultAzureCredential()
         );
 
@@ -121,29 +242,84 @@
         // Set SQL Parameter to pass in user message
         SqlParameter param = new SqlParameter();
         param.ParameterName = "@userMessage";
-        param.Value = message.Content;
+        param.Value = currentMessage;
 
-        // Azure OpenAI client - local development
-        AzureOpenAIClient azureClient = new(
-            new Uri(endpoint),
-            new ApiKeyCredential(apiKey)
-        );
+        // Get embedding deployment name
+        string embeddingDeploymentName = _config["OPENAI_EMBEDDING_DEPLOYMENT_NAME"] ?? 
+                                       _config["OpenAI__EMBEDDING_DEPLOYMENT_NAME"] ?? 
+                                       "text-embedding-ada-002";
 
-        // Azure OpenAI client - Managed Identity
-        @* AzureOpenAIClient azureClient = new(
-             new Uri("https://jefmarti-open-ai.openai.azure.com/"),
-             new DefaultAzureCredential()
-        ); *@
+        // Azure OpenAI client with smart authentication fallback
+        AzureOpenAIClient azureClient;
+        
+        // First check for local development API key
+        string? apiKey = _config["OpenAI:API_KEY"] ?? _config["OpenAI__API_KEY"];
+        
+        Console.WriteLine($"[DEBUG] OpenAI Endpoint: {endpoint}");
+        Console.WriteLine($"[DEBUG] Chat Deployment: {deploymentName}");
+        Console.WriteLine($"[DEBUG] Embedding Deployment: {embeddingDeploymentName}");
+        Console.WriteLine($"[DEBUG] API Key present: {!string.IsNullOrEmpty(apiKey)}");
+        
+        if (!string.IsNullOrEmpty(apiKey))
+        {
+            // Local development - use API key
+            Console.WriteLine("[DEBUG] Using API Key authentication for local development");
+            azureClient = new AzureOpenAIClient(
+                new Uri(endpoint),
+                new ApiKeyCredential(apiKey)
+            );
+        }
+        else
+        {
+            // Deployed environment - use Managed Identity with optimized credential chain
+            Console.WriteLine("[DEBUG] Using DefaultAzureCredential for deployed environment");
+            Console.WriteLine($"[DEBUG] Azure Client ID: {Environment.GetEnvironmentVariable("AZURE_CLIENT_ID")}");
+            Console.WriteLine($"[DEBUG] MSI Endpoint: {Environment.GetEnvironmentVariable("MSI_ENDPOINT")}");
+            
+            var credential = new DefaultAzureCredential(new DefaultAzureCredentialOptions
+            {
+                // Exclude problematic credential types for Container Apps
+                ExcludeInteractiveBrowserCredential = true,
+                ExcludeSharedTokenCacheCredential = true,
+                ExcludeVisualStudioCredential = true,
+                ExcludeVisualStudioCodeCredential = true,
+                ExcludeAzureCliCredential = true,
+                ExcludeAzurePowerShellCredential = true,
+                ExcludeAzureDeveloperCliCredential = true
+            });
+            
+            azureClient = new AzureOpenAIClient(
+                new Uri(endpoint),
+                credential
+            );
+        }
 
-        EmbeddingClient ec = azureClient.GetEmbeddingClient("text-embedding-ada-002");
+        EmbeddingClient ec = azureClient.GetEmbeddingClient(embeddingDeploymentName);
 
         // Generate embedding for the user message
-        OpenAIEmbedding embedding = await ec.GenerateEmbeddingAsync(message.Content ?? string.Empty);
+        OpenAIEmbedding embedding;
+        try
+        {
+            Console.WriteLine($"[DEBUG] Attempting to generate embedding for: '{currentMessage}'");
+            embedding = await ec.GenerateEmbeddingAsync(currentMessage ?? string.Empty);
+            Console.WriteLine("[DEBUG] Successfully generated embedding");
+        }
+        catch (Exception embeddingEx)
+        {
+            Console.WriteLine($"[ERROR] Failed to generate embedding: {embeddingEx.Message}");
+            Console.WriteLine($"[ERROR] Exception type: {embeddingEx.GetType().Name}");
+            response = $"Error generating embedding: {embeddingEx.Message}";
+            
+            // Add messages to list for rendering
+            Messages.Add(new Message { Content = currentMessage, IsUser = true });
+            Messages.Add(new Message { Content = response, IsUser = false });
+            return;
+        }
 
         ReadOnlyMemory<float> vector = embedding.ToFloats();
 
         // Cosmos Hybrid search w/ query definition (NOTE: FullTextScore requires a string literal so SQL parameter can't work here)
-        var userMessage = (message.Content ?? string.Empty).Replace("'", "''"); // Escape single quotes
+        var userMessage = (currentMessage ?? string.Empty).Replace("'", "''"); // Escape single quotes
         var query = $@"SELECT TOP 5 * FROM c ORDER BY RANK RRF(FullTextScore(c.content, '{userMessage}'), VectorDistance(c.titleVector, [@embedding]))";
         var queryDef = new QueryDefinition(query).WithParameter("@embedding", vector);
 
@@ -170,35 +346,58 @@
             responseCosmos += resultItem;
         };
         
-        // Create prompt template
-        var chat = kernel.CreateFunctionFromPrompt(
-                        @"{{$history}}
-                    User: {{$request}}
-                    Cosmos DB Results: {{$responseCosmos}}
-                    Assistant: ");
+        // Simplified approach - use direct Azure OpenAI client instead of Semantic Kernel for more control
+        var chatClient = azureClient.GetChatClient(deploymentName);
 
         // Send user message and Cosmos DB results to chat completion model
-        var chatResult = kernel.InvokeStreamingAsync<StreamingChatMessageContent>(
-                chat,
-                new() {
-                        { "request", message.Content },
-                        { "history", string.Join("\n", chatHistory.Select(x => x.Role + ": " + x.Content)) },
-                        { "cosmosResults", responseCosmos }
-                           }
-                );
-
-        await foreach (var chunk in chatResult)
+        var chatMessages = new List<ChatMessage>
         {
-            response += chunk;
+            new SystemChatMessage("You are a helpful assistant that answers questions about my Cosmos DB data"),
+            new UserChatMessage($"User Question: {currentMessage}\n\nRelevant Data from Cosmos DB:\n{responseCosmos}\n\nPlease provide a helpful answer based on the data provided.")
+        };
+
+        try
+        {
+            var chatResponse = await chatClient.CompleteChatAsync(chatMessages);
+            response = chatResponse.Value.Content[0].Text;
+        }
+        catch (Exception ex)
+        {
+            response = $"Error getting chat response: {ex.Message}";
+            Console.WriteLine($"Chat completion error: {ex.Message}");
         }
 
         // Append messages to chat history
-        chatHistory.AddUserMessage(message.Content!);
+        chatHistory.AddUserMessage(currentMessage!);
         chatHistory.AddAssistantMessage(response);
 
         // Add messages to list for rendering
-        Messages.Add(new Message { Content = message.Content, IsUser = true });
+        Messages.Add(new Message { Content = currentMessage, IsUser = true });
         Messages.Add(new Message { Content = response, IsUser = false });
+        }
+        catch (Exception ex)
+        {
+            // Handle any errors that occur during the process
+            var errorMessage = $"Error processing your message: {ex.Message}";
+            Console.WriteLine($"SemanticKernelClient error: {ex}");
+            
+            // Add error message to chat
+            Messages.Add(new Message { Content = currentMessage, IsUser = true });
+            Messages.Add(new Message { Content = errorMessage, IsUser = false });
+            
+            // Restore the original message if there was an error
+            if (string.IsNullOrEmpty(message.Content))
+            {
+                message.Content = currentMessage;
+            }
+        }
+        finally
+        {
+            // Reset loading state
+            isLoading = false;
+            // Ensure UI updates
+            await InvokeAsync(StateHasChanged);
+        }
     }
 }
 

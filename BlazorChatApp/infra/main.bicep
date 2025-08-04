@@ -67,7 +67,6 @@ module containerApp 'modules/container-app.bicep' = {
     cosmosDbAccountName: actualCosmosDbAccountName
     cosmosDbDatabaseName: cosmosDbDatabaseName
     cosmosDbContainerName: cosmosDbContainerName
-    openAiName: actualOpenAiName
     openAiChatDeploymentName: openAi.outputs.chatDeploymentName
     openAiEmbeddingDeploymentName: openAi.outputs.embeddingDeploymentName
     openAiEndpoint: openAi.outputs.endpoint
@@ -115,16 +114,13 @@ resource cosmosDbRoleAssignment 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAs
 
 // Grant Container App managed identity access to OpenAI
 resource openAiRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(actualOpenAiName, userAssignedIdentity.id, 'a97b65f3-24c7-4388-baec-2e87135dc908')
+  name: guid(actualOpenAiName, userAssignedIdentity.id, '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd')
   scope: resourceGroup()
   properties: {
     principalId: userAssignedIdentity.properties.principalId
-    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', 'a97b65f3-24c7-4388-baec-2e87135dc908') // Cognitive Services User
+    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd') // Cognitive Services OpenAI User
     principalType: 'ServicePrincipal'
   }
-  dependsOn: [
-    openAi
-  ]
 }
 
 output containerAppFqdn string = containerApp.outputs.containerAppFqdn

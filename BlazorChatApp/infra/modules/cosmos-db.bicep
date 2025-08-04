@@ -28,10 +28,12 @@ resource cosmosDb 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' = {
       }
     ]
     // Enhanced security settings
-    disableLocalAuth: false  // Allow both AAD and key-based auth for flexibility
+    disableLocalAuth: false  // Explicitly enable key-based auth for compatibility
     enableAnalyticalStorage: false
     enableAutomaticFailover: false
     enableMultipleWriteLocations: false
+    // Disable public network access to force private access
+    publicNetworkAccess: 'Enabled'  // Keep enabled for Container Apps access
   }
 }
 
@@ -70,8 +72,20 @@ resource container 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/container
   }
 }
 
-// output endpoint string = cosmosDb.properties.documentEndpoint
-// output primaryKey string = listKeys(cosmosDb.id, cosmosDb.apiVersion).primaryMasterKey
+// Additional container for chat messages (if needed by the application)
+resource chatMessagesContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-11-15' = {
+  parent: db
+  name: 'ChatMessages'
+  properties: {
+    resource: {
+      id: 'ChatMessages'
+      partitionKey: {
+        paths: ['/partitionKey']
+        kind: 'Hash'
+      }
+    }
+  }
+}
 
 // Outputs for reference (avoid outputting sensitive keys in production)
 output accountName string = cosmosDb.name

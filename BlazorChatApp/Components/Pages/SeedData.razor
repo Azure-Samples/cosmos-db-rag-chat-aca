@@ -1,4 +1,5 @@
 @page "/admin/seed-data"
+@rendermode InteractiveServer
 @inject Microsoft.Extensions.Configuration.IConfiguration _config
 
 <PageTitle>Data Seeding</PageTitle>
@@ -18,30 +19,82 @@
                     
                     @if (isSeeding)
                     {
-                        <div class="d-flex align-items-center">
-                            <div class="spinner-border text-primary me-3" role="status">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
-                            <span>Seeding data... This may take a few minutes.</span>
-                        </div>
-                        
-                        @if (!string.IsNullOrEmpty(currentStatus))
-                        {
-                            <div class="mt-3">
-                                <div class="alert alert-info">
-                                    @currentStatus
+                        <div class="mb-4">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="spinner-border text-primary me-3" role="status">
+                                    <span class="visually-hidden">Loading...</span>
                                 </div>
+                                <span><strong>Seeding data in progress...</strong></span>
                             </div>
-                        }
+                            
+                            @if (progressPercentage > 0)
+                            {
+                                <div class="progress mb-3" style="height: 20px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                         role="progressbar" 
+                                         style="width: @(progressPercentage)%"
+                                         aria-valuenow="@progressPercentage" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100">
+                                        @progressPercentage%
+                                    </div>
+                                </div>
+                            }
+                            
+                            @if (!string.IsNullOrEmpty(currentStatus))
+                            {
+                                <div class="alert alert-info">
+                                    <div style="font-family: monospace; white-space: pre-line;">@currentStatus</div>
+                                </div>
+                            }
+                            
+                            @if (progressMessages.Any())
+                            {
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">
+                                            <button class="btn btn-link p-0" type="button" data-bs-toggle="collapse" 
+                                                    data-bs-target="#progressCollapse" aria-expanded="false">
+                                                📋 Progress Log (@progressMessages.Count messages)
+                                            </button>
+                                        </h6>
+                                    </div>
+                                    <div class="collapse" id="progressCollapse">
+                                        <div class="card-body" style="max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.9em;">
+                                            @foreach (var message in progressMessages.AsEnumerable().Reverse().Take(20))
+                                            {
+                                                <div class="mb-1">
+                                                    <small class="text-muted">[@message.Timestamp.ToString("HH:mm:ss")]</small>
+                                                    <span>@message.Message</span>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
                     }
                     else if (seedingComplete)
                     {
                         <div class="alert alert-success">
-                            <h5 class="alert-heading">✅ Data seeding completed successfully!</h5>
-                            <p>Sample vector data has been loaded into your Cosmos DB container. You can now:</p>
+                            <h5 class="alert-heading">🎉 Data seeding completed successfully!</h5>
+                            <p><strong>Summary:</strong></p>
+                            <ul>
+                                <li>✅ Sample vector data has been loaded into your Cosmos DB container</li>
+                                <li>📊 Progress: @progressPercentage% complete</li>
+                                <li>⏱️ Total time: @(progressMessages.Count > 0 ? $"{(DateTime.Now - progressMessages.First().Timestamp).TotalSeconds:F1} seconds" : "N/A")</li>
+                                <li>📝 Total messages processed: @progressMessages.Count</li>
+                            </ul>
+                            <p><strong>What's next?</strong></p>
                             <ul>
                                 <li>Go to the <a href="/chat" class="alert-link">Chat page</a> to test the RAG functionality</li>
-                                <li>Ask questions about Azure services like "What is Azure Functions?" or "Tell me about Azure Cosmos DB"</li>
+                                <li>Try asking questions like:</li>
+                                <ul>
+                                    <li>"What is Azure Functions?"</li>
+                                    <li>"Tell me about Azure Cosmos DB"</li>
+                                    <li>"How does Azure Storage work?"</li>
+                                    <li>"Explain machine learning in Azure"</li>
+                                </ul>
                             </ul>
                         </div>
                     }
@@ -74,19 +127,47 @@
                 <div class="card-footer">
                     @if (!isSeeding && !seedingComplete)
                     {
-                        <button class="btn btn-primary" @onclick="StartSeeding" disabled="@isSeeding">
-                            <i class="fas fa-database"></i> Seed Sample Data
+                        <button class="btn btn-primary btn-lg" @onclick="StartSeeding" disabled="@isSeeding">
+                            <i class="fas fa-database"></i> Start Data Seeding
                         </button>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i> 
+                                This will load ~108 technology articles with vector embeddings into Cosmos DB
+                            </small>
+                        </div>
+                    }
+                    
+                    @if (isSeeding)
+                    {
+                        <button class="btn btn-secondary" disabled>
+                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            Seeding in progress...
+                        </button>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-clock"></i> 
+                                Please wait while we upload the sample data. This typically takes 1-2 minutes.
+                            </small>
+                        </div>
                     }
                     
                     @if (seedingComplete)
                     {
-                        <a href="/chat" class="btn btn-success">
-                            <i class="fas fa-comments"></i> Try the Chat
+                        <a href="/chat" class="btn btn-success btn-lg">
+                            <i class="fas fa-comments"></i> Try the Chat Now
                         </a>
-                        <button class="btn btn-secondary ms-2" @onclick="ResetPage">
+                        <button class="btn btn-outline-secondary ms-2" @onclick="ResetPage">
                             <i class="fas fa-redo"></i> Seed Again
                         </button>
+                        <div class="mt-2">
+                            <small class="text-success">
+                                <i class="fas fa-check-circle"></i> 
+                                Ready to test! Your Cosmos DB now contains vector data for the RAG chat.
+                            </small>
+                        </div>
                     }
                 </div>
             </div>
@@ -100,27 +181,75 @@
     private bool hasError = false;
     private string errorMessage = string.Empty;
     private string currentStatus = string.Empty;
+    private int progressPercentage = 0;
+    private List<ProgressMessage> progressMessages = new();
+    
+    private class ProgressMessage
+    {
+        public DateTime Timestamp { get; set; }
+        public string Message { get; set; } = string.Empty;
+    }
 
     private async Task StartSeeding()
     {
         try
         {
+            // Reset state
             isSeeding = true;
+            seedingComplete = false;
             hasError = false;
             errorMessage = string.Empty;
-            currentStatus = "Initializing data seeding...";
+            currentStatus = string.Empty;
+            progressPercentage = 0;
+            progressMessages.Clear();
+            
             StateHasChanged();
 
             var seeder = new DataSeeder(_config);
-            await seeder.SeedSampleDataAsync();
+            
+            // Progress callback to update UI in real-time
+            void UpdateProgress(string message)
+            {
+                InvokeAsync(() =>
+                {
+                    currentStatus = message;
+                    progressMessages.Add(new ProgressMessage 
+                    { 
+                        Timestamp = DateTime.Now, 
+                        Message = message 
+                    });
+                    
+                    // Parse progress percentage from progress messages
+                    if (message.Contains("Progress:") && message.Contains("%"))
+                    {
+                        var match = System.Text.RegularExpressions.Regex.Match(message, @"\((\d+)%\)");
+                        if (match.Success && int.TryParse(match.Groups[1].Value, out int percentage))
+                        {
+                            progressPercentage = percentage;
+                        }
+                    }
+                    
+                    StateHasChanged();
+                });
+            }
+            
+            // Start seeding with progress callback
+            await seeder.SeedSampleDataAsync(UpdateProgress);
 
             seedingComplete = true;
-            currentStatus = "Data seeding completed successfully!";
+            progressPercentage = 100;
+            currentStatus = "🎉 Data seeding completed successfully!";
         }
         catch (Exception ex)
         {
             hasError = true;
             errorMessage = ex.Message;
+            currentStatus = $"❌ Error: {ex.Message}";
+            progressMessages.Add(new ProgressMessage 
+            { 
+                Timestamp = DateTime.Now, 
+                Message = $"❌ Fatal error: {ex.Message}" 
+            });
             Console.WriteLine($"Seeding error: {ex}");
         }
         finally
@@ -137,6 +266,8 @@
         hasError = false;
         errorMessage = string.Empty;
         currentStatus = string.Empty;
+        progressPercentage = 0;
+        progressMessages.Clear();
         StateHasChanged();
     }
 }

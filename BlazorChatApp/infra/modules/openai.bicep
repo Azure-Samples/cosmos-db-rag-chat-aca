@@ -59,3 +59,4 @@ output serviceName string = openai.name
 output endpoint string = openai.properties.endpoint
 output chatDeploymentName string = chatDeployment.name
 output embeddingDeploymentName string = embeddingDeployment.name
+output resourceId string = openai.id
