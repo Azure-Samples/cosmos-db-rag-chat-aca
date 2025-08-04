@@ -4,17 +4,18 @@ A **Retrieval-Augmented Generation (RAG)** chat application built with **Blazor 
 
 ## ✨ Features
 
-- **AI-Powered Chat**: Integration with Azure OpenAI for intelligent responses
-- **Vector Search**: Azure Cosmos DB vector search with pre-computed embeddings
-- **Secure Authentication**: Azure Managed Identity for secure service connections
-- **Containerized**: Docker support for easy deployment and scaling
-- **Infrastructure as Code**: Bicep templates for complete Azure resource provisioning
-- **Responsive UI**: Modern Blazor Server interface with real-time updates
-- **Sample Data**: Includes 108 pre-loaded technology articles with embeddings
+- 🤖 **AI-Powered Chat**: Integration with Azure OpenAI for intelligent responses
+- 🔍 **Vector Search**: Azure Cosmos DB vector search with pre-computed embeddings
+- ⚡ **Real-time UI**: Interactive chat interface with typing indicators and keyboard support
+- 🔐 **Secure Authentication**: Azure Managed Identity for secure service connections
+- 🐳 **Containerized**: Docker support for easy deployment and scaling
+- 🏗️ **Infrastructure as Code**: Bicep templates for complete Azure resource provisioning
+- 📱 **Responsive UI**: Modern Blazor Server interface with real-time updates
+- 📚 **Sample Data**: Includes 108 pre-loaded technology articles with embeddings
 
 ## 🏗️ Architecture
 
-`	ext
+```text
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │   Blazor App    │───▶│  Azure OpenAI    │    │  Azure Cosmos   │
 │  (Container)    │    │   GPT-4o         │    │      DB         │
@@ -25,7 +26,7 @@ A **Retrieval-Augmented Generation (RAG)** chat application built with **Blazor 
          └─────────────▶│ Direct OpenAI    │────────────┘
                         │   Client         │
                         └──────────────────┘
-`
+```
 
 ## 🛠️ Technology Stack
 
@@ -53,7 +54,7 @@ The fastest way to get this application running in Azure:
 
 ### Deploy to Azure
 
-`ash
+```bash
 # Clone the repository
 git clone https://github.com/Azure-Samples/cosmos-db-rag-chat-aca.git
 cd cosmos-db-rag-chat-aca/BlazorChatApp
@@ -66,21 +67,21 @@ azd init
 
 # Deploy infrastructure and application
 azd up
-`
+```
 
-That's it! The zd up command will:
+That's it! The `azd up` command will:
 
-1. **Provision infrastructure**: Creates all Azure resources using Bicep templates
-2. **Build container**: Builds and pushes the Docker image to Azure Container Registry
-3. **Deploy application**: Deploys the containerized app to Azure Container Apps
-4. **Configure security**: Sets up managed identity and role assignments
-5. **Seed sample data**: Loads 108 technology articles with pre-computed embeddings
+1. 🏗️ **Provision infrastructure**: Creates all Azure resources using Bicep templates
+2. 🐳 **Build container**: Builds and pushes the Docker image to Azure Container Registry
+3. 🚀 **Deploy application**: Deploys the containerized app to Azure Container Apps
+4. 🔧 **Configure security**: Sets up managed identity and role assignments
+5. 📊 **Seed sample data**: Loads 108 technology articles with pre-computed embeddings
 
 ### Access Your Application
 
 After deployment completes, you'll get the application URL:
 
-`ash
+```bash
 # View deployment outputs and URLs
 azd show
 
@@ -88,7 +89,7 @@ azd show
 # - Main App: https://your-app-name.region.azurecontainerapps.io
 # - Chat Interface: https://your-app-name.region.azurecontainerapps.io/chat
 # - Admin/Seed Data: https://your-app-name.region.azurecontainerapps.io/admin/seed-data
-`
+```
 
 ### 🔐 Important: Data Seeding Authentication
 
@@ -105,9 +106,9 @@ This one-time authentication step enables your user account to access Cosmos DB 
 
 ### 1. Configure Application Settings
 
-Create a local ppsettings.Development.json file:
+Create a local `appsettings.Development.json` file:
 
-`json
+```json
 {
   "COSMOS_DB": {
     "ENDPOINT_DB": "https://your-cosmos-db.documents.azure.com:443/"
@@ -118,11 +119,11 @@ Create a local ppsettings.Development.json file:
     "MODEL_ID": "gpt-4o"
   }
 }
-`
+```
 
 ### 2. Build and Run
 
-`ash
+```bash
 # Build the Docker image
 docker build -t blazor-chat-app .
 
@@ -132,53 +133,54 @@ docker run -d -p 8080:8080 --name blazor-chat-container blazor-chat-app
 # Access the application
 # - Main App: http://localhost:8080
 # - Chat Interface: http://localhost:8080/chat
-`
+```
 
 ### 3. Stop and Clean Up
 
-`ash
+```bash
 # Stop and remove container
 docker stop blazor-chat-container
 docker rm blazor-chat-container
 
 # Remove image (optional)
 docker rmi blazor-chat-app
-`
+```
 
-## �� Troubleshooting
+## 🔧 Troubleshooting
 
 ### Common Issues
 
-**Authentication Error: "Access denied due to invalid subscription key"**
+#### Authentication Error: "Access denied due to invalid subscription key"
 
 - Solution: This usually means API key authentication is interfering with managed identity
-- Ensure ppsettings.json does not contain hardcoded API keys
+- Ensure `appsettings.json` does not contain hardcoded API keys
 - The application should use managed identity for Azure OpenAI access
 
-**Cosmos DB Authentication Issues**
+#### Cosmos DB Authentication Issues
 
 - Error: "Authorization header doesn't confirm to the required format"
 - Error: "Local Authorization is disabled"
 - Solution: Your user account needs Azure AD authentication
+
   1. Go to Azure Portal → Your Cosmos DB account → Data Explorer
   2. Click "Login with Entra ID" button
   3. Complete authentication flow
 
-**Container App Won't Start**
+#### Container App Won't Start
 
-- Check container app logs: zd show then follow the logs URL
+- Check container app logs: `azd show` then follow the logs URL
 - Verify managed identity permissions are properly configured
 - Ensure Docker image was successfully pushed to ACR
 
-**Chat Not Working**
+#### Chat Not Working
 
 - Verify Azure OpenAI deployment is accessible
-- Check that Cosmos DB database ectordb and container Container3 exist
+- Check that Cosmos DB database `vectordb` and container `Container3` exist
 - Confirm sample data has been seeded
 
 ### Useful Commands
 
-`ash
+```bash
 # View application status and URLs
 azd show
 
@@ -196,11 +198,11 @@ azd env get-values
 
 # Open Azure portal for current resources
 azd monitor --overview
-`
+```
 
 ### Monitor Your Application
 
-`ash
+```bash
 # Check container app status directly
 az containerapp show --name <app-name> --resource-group <rg-name> --query "properties.provisioningState"
 
@@ -209,11 +211,11 @@ az containerapp logs show --name <app-name> --resource-group <rg-name> --follow
 
 # Test application health
 curl -I https://your-app-url
-`
+```
 
 ## 📁 Project Structure
 
-`
+```
 cosmos-db-rag-chat-aca/
 ├── BlazorChatApp/              # Main application directory
 │   ├── Components/
@@ -231,7 +233,7 @@ cosmos-db-rag-chat-aca/
 ├── .github/                    # GitHub workflows and templates
 ├── azure.yaml                  # Root AZD configuration
 └── README.md                   # This file
-`
+```
 
 ## 📖 How It Works
 
@@ -242,12 +244,13 @@ cosmos-db-rag-chat-aca/
 3. **Context Retrieval**: Relevant documents are retrieved using vector similarity
 4. **Augmented Prompt**: Retrieved context is combined with user query
 5. **AI Response**: Azure OpenAI generates response based on augmented prompt
+6. **Real-time Response**: Answer is displayed with typing indicators for better UX
 
 ### Data Structure
 
 The application uses the following data structure in Cosmos DB:
 
-`json
+```json
 {
   "id": "doc-001",
   "title": "Document Title",
@@ -257,7 +260,7 @@ The application uses the following data structure in Cosmos DB:
   "contentVector": [0.3, 0.4, ...],
   "partitionKey": "Technology"
 }
-`
+```
 
 ### Security Model
 
