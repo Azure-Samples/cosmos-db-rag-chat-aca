@@ -2,17 +2,6 @@
 
 A **Retrieval-Augmented Generation (RAG)** chat application built with **Blazor Server**, **Azure Cosmos DB** vector search, and **Azure OpenAI**. This application demonstrates modern AI-powered chat experiences using hybrid search capabilities.
 
-## ✨ Features
-
-- 🤖 **AI-Powered Chat**: Integration with Azure OpenAI for intelligent responses
-- 🔍 **Vector Search**: Azure Cosmos DB vector search with pre-computed embeddings
-- ⚡ **Real-time UI**: Interactive chat interface with typing indicators and keyboard support
-- 🔐 **Secure Authentication**: Azure Managed Identity for secure service connections
-- 🐳 **Containerized**: Docker support for easy deployment and scaling
-- 🏗️ **Infrastructure as Code**: Bicep templates for complete Azure resource provisioning
-- 📱 **Responsive UI**: Modern Blazor Server interface with real-time updates
-- 📚 **Sample Data**: Includes 108 pre-loaded technology articles with embeddings
-
 ## 🏗️ Architecture
 
 ```text
