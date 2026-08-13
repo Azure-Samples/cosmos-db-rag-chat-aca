@@ -126,8 +126,8 @@ public class DataSeeder
             progressCallback?.Invoke("ℹ️ Local authorization is disabled on this Cosmos DB account - using Azure AD authentication");
             
             // Debug environment variables for database and container
-            var databaseName = _configuration["COSMOSDB_DATABASE_NAME"] ?? "vectordb";
-            var containerName = _configuration["COSMOSDB_CONTAINER_NAME"] ?? "Container3";
+            var databaseName = _configuration["COSMOSDB_DATABASE_NAME"] ?? "ChatRagDb";
+            var containerName = _configuration["COSMOSDB_CONTAINER_NAME"] ?? "KnowledgeDocuments";
             progressCallback?.Invoke($"🎯 Target database: {databaseName}, container: {containerName}");
             
             // Get database and container using environment configuration

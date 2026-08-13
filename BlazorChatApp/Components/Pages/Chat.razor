@@ -7,6 +7,7 @@
 @using Azure
 @using OpenAI.Chat
 @using Microsoft.AspNetCore.Components.Web
+@using BlazorChatApp.Utils
 
 <PageTitle>Chat</PageTitle>
 
@@ -235,14 +236,11 @@
             tokenCredential: new DefaultAzureCredential()
         );
 
-        Database database = client.GetDatabase("vectordb"); // add database name here
-        Container container = database.GetContainer("Container3"); // add container name here
+        var databaseName = _config["COSMOSDB_DATABASE_NAME"] ?? "ChatRagDb";
+        var containerName = _config["COSMOSDB_CONTAINER_NAME"] ?? "KnowledgeDocuments";
+        Database database = client.GetDatabase(databaseName);
+        Container container = database.GetContainer(containerName);
         #endregion
-
-        // Set SQL Parameter to pass in user message
-        SqlParameter param = new SqlParameter();
-        param.ParameterName = "@userMessage";
-        param.Value = currentMessage;
 
         // Get embedding deployment name
         string embeddingDeploymentName = _config["OPENAI_EMBEDDING_DEPLOYMENT_NAME"] ?? 
@@ -318,10 +316,7 @@
 
         ReadOnlyMemory<float> vector = embedding.ToFloats();
 
-        // Cosmos Hybrid search w/ query definition (NOTE: FullTextScore requires a string literal so SQL parameter can't work here)
-        var userMessage = (currentMessage ?? string.Empty).Replace("'", "''"); // Escape single quotes
-        var query = $@"SELECT TOP 5 * FROM c ORDER BY RANK RRF(FullTextScore(c.content, '{userMessage}'), VectorDistance(c.titleVector, [@embedding]))";
-        var queryDef = new QueryDefinition(query).WithParameter("@embedding", vector);
+        var queryDef = CosmosSearchQuery.Create(vector);
 
         using FeedIterator<VectorItem> feed = container.GetItemQueryIterator<VectorItem>(
             queryDefinition: queryDef
@@ -400,4 +395,3 @@
         }
     }
 }
-

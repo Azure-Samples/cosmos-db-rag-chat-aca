@@ -22,6 +22,12 @@
     },
     "openAiName": {
       "value": ""
+    },
+    "azureAdTenantId": {
+      "value": "${AZURE_AD_TENANT_ID}"
+    },
+    "azureAdClientId": {
+      "value": "${AZURE_AD_CLIENT_ID}"
     }
   }
 }

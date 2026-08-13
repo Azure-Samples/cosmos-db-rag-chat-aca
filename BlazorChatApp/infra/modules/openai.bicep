@@ -15,15 +15,15 @@ resource openai 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
   }
 }
 
-// Chat completion model deployment (GPT-4o)
+// Chat completion model deployment (GPT-5.1)
 resource chatDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: openai
-  name: 'gpt-4o'
+  name: 'gpt-5.1'
   properties: {
     model: {
       format: 'OpenAI'
-      name: 'gpt-4o'
-      version: '2024-08-06'
+      name: 'gpt-5.1'
+      version: '2025-11-13'
     }
     raiPolicyName: 'Microsoft.DefaultV2'
   }

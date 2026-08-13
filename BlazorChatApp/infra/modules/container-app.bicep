@@ -11,6 +11,8 @@ param cosmosDbContainerName string
 param openAiChatDeploymentName string
 param openAiEmbeddingDeploymentName string
 param openAiEndpoint string
+param azureAdTenantId string
+param azureAdClientId string
 
 resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: acrName
@@ -133,6 +135,18 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'OPENAI_EMBEDDING_DEPLOYMENT_NAME'
               value: openAiEmbeddingDeploymentName
+            }
+            {
+              name: 'ENTRA_TENANT_ID'
+              value: azureAdTenantId
+            }
+            {
+              name: 'ENTRA_CLIENT_ID'
+              value: azureAdClientId
+            }
+            {
+              name: 'ASPNETCORE_FORWARDEDHEADERS_ENABLED'
+              value: 'true'
             }
           ]
           resources: {
