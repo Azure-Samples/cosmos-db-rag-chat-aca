@@ -1,5 +1,6 @@
 @page "/admin/seed-data"
 @rendermode InteractiveServer
+@attribute [Authorize]
 @inject Microsoft.Extensions.Configuration.IConfiguration _config
 
 <PageTitle>Data Seeding</PageTitle>
@@ -107,7 +108,7 @@
                             <ul>
                                 <li>Cosmos DB connection is configured correctly</li>
                                 <li>Container app has the required permissions</li>
-                                <li>Database "vectordb" and container "Container3" exist</li>
+                                <li>Database "ChatRagDb" and container "KnowledgeDocuments" exist</li>
                             </ul>
                         </div>
                     }
@@ -118,7 +119,7 @@
                             <p>Make sure:</p>
                             <ul>
                                 <li>Your Cosmos DB is properly configured with vector search enabled</li>
-                                <li>The database "vectordb" and container "Container3" exist</li>
+                                <li>The database "ChatRagDb" and container "KnowledgeDocuments" exist</li>
                                 <li>The container app has proper permissions to write to Cosmos DB</li>
                             </ul>
                         </div>

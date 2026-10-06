@@ -6,8 +6,8 @@ A **Retrieval-Augmented Generation (RAG)** chat application built with **Blazor 
 
 ```text
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Blazor App    │───▶│  Azure OpenAI    │    │  Azure Cosmos   │
-│  (Container)    │    │   GPT-4o         │    │      DB         │
+│   Blazor App    │───▶│  Azure OpenAI    |    │  Azure Cosmos   │
+│  (Container)    │    │   GPT-5.1        │    │      DB         │
 └─────────────────┘    └──────────────────┘    │  Vector Search  │
          │                                      └─────────────────┘
          │                                              ▲
@@ -82,14 +82,13 @@ azd show
 
 ### 🔐 Important: Data Seeding Authentication
 
-The application uses **Azure AD authentication** for Cosmos DB access. When you first visit the Admin/Seed Data page:
+The Seed Data navigation link is always visible, while the page itself requires Microsoft Entra ID sign-in. Configure the app registration used by `AzureAd:ClientId` with:
 
-1. **Portal Authentication**: Navigate to your Cosmos DB account in Azure Portal
-2. **Open Data Explorer**: Click "Data Explorer" in the left menu
-3. **Login with Entra ID**: Click the "Login with Entra ID" button when prompted
-4. **Grant Permissions**: Complete the authentication flow
+1. **Redirect URI**: `https://<your-app-hostname>/signin-oidc`
+2. **Implicit ID tokens**: Enable ID token issuance for this sign-in-only sample
+3. **Configuration values**: `AzureAd:TenantId` and `AzureAd:ClientId`
 
-This one-time authentication step enables your user account to access Cosmos DB through the Azure Portal, which is required for initial data seeding operations.
+Cosmos DB writes run under the container app managed identity; user credentials are not sent to Cosmos DB.
 
 ## 🐳 Local Development with Docker
 
@@ -103,9 +102,9 @@ Create a local `appsettings.Development.json` file:
     "ENDPOINT_DB": "https://your-cosmos-db.documents.azure.com:443/"
   },
   "OpenAI": {
-    "DEPLOYMENT_NAME": "gpt-4o",
+    "DEPLOYMENT_NAME": "gpt-5.1",
     "ENDPOINT": "https://your-openai.openai.azure.com/",
-    "MODEL_ID": "gpt-4o"
+    "MODEL_ID": "gpt-5.1"
   }
 }
 ```
@@ -145,15 +144,43 @@ docker rmi blazor-chat-app
 - Ensure `appsettings.json` does not contain hardcoded API keys
 - The application should use managed identity for Azure OpenAI access
 
-#### Cosmos DB Authentication Issues
+#### Cosmos DB Authentication and Data Issues
 
-- Error: "Authorization header doesn't confirm to the required format"
-- Error: "Local Authorization is disabled"
-- Solution: Your user account needs Azure AD authentication
+The current deployment uses:
 
-  1. Go to Azure Portal → Your Cosmos DB account → Data Explorer
-  2. Click "Login with Entra ID" button
-  3. Complete authentication flow
+- Cosmos DB account: the generated `blazorchat-cosmos-*` account
+- Database: `ChatRagDb`
+- RAG document container: `KnowledgeDocuments`
+- Reserved conversation container: `ChatMessages`
+
+The older `vectordb` database and `Container3` container might still exist after an upgrade, but the application no longer uses them.
+
+**Data Explorer reports `readMetadata` is blocked**
+
+The principal shown in the error needs a Cosmos DB native data-plane role on the Cosmos DB account. Assign **Cosmos DB Built-in Data Contributor** at the account scope, wait several minutes for propagation, and then refresh the Entra token or sign in again. Azure resource-management roles such as Contributor do not grant Cosmos DB document access.
+
+**The application reports local authorization or authorization-header errors**
+
+Local key authentication is disabled. The deployed Container App accesses Cosmos DB through its managed identity, which must have **Cosmos DB Built-in Data Contributor** at the account scope. Data Explorer uses the signed-in user's identity instead, so the user and the Container App identity can require separate assignments.
+
+**The Seed Data page is missing or fails during sign-in**
+
+- The **Seed Data** navigation link should always be visible at `/admin/seed-data`.
+- The page requires Microsoft Entra ID sign-in.
+- Confirm the app registration redirect URI exactly matches `https://<your-app-hostname>/signin-oidc`.
+- Confirm ID token issuance is enabled and the azd environment values `AZURE_AD_TENANT_ID` and `AZURE_AD_CLIENT_ID` identify that app registration.
+
+**`KnowledgeDocuments` contains no items**
+
+Newly provisioned containers start empty. Sign in, open **Seed Data**, and run **Start Data Seeding** to load the bundled documents. Chat requests only read from `KnowledgeDocuments`; they do not create documents. `ChatMessages` is provisioned for future conversation persistence but is not currently written by the application.
+
+**Cosmos DB returns an `ORDER BY`, `RRF`, or apostrophe syntax error**
+
+The running Container App is likely using an older image with the previous hybrid-search query. Redeploy the web service so it uses the parameterized vector query:
+
+```bash
+azd deploy web
+```
 
 #### Container App Won't Start
 
@@ -164,8 +191,10 @@ docker rmi blazor-chat-app
 #### Chat Not Working
 
 - Verify Azure OpenAI deployment is accessible
-- Check that Cosmos DB database `vectordb` and container `Container3` exist
-- Confirm sample data has been seeded
+- Check that Cosmos DB database `ChatRagDb` and container `KnowledgeDocuments` exist
+- Confirm `KnowledgeDocuments` contains seeded items
+- Confirm the Container App managed identity has Cosmos DB Built-in Data Contributor at the account scope
+- Redeploy the web service if errors reference `Container3`, `RRF`, or interpolated user text
 
 ### Useful Commands
 
@@ -254,7 +283,8 @@ The application uses the following data structure in Cosmos DB:
 ### Security Model
 
 - **Managed Identity**: Container app authenticates to Azure services without storing credentials
-- **Azure AD Authentication**: User accounts require Azure AD authentication for admin operations
+- **Entra ID Authentication**: User accounts require Microsoft Entra ID sign-in for admin operations
+- **Authenticated Data Seeding**: `/admin/seed-data` requires Microsoft Entra ID sign-in before Cosmos DB writes can start
 - **Role-Based Access**: Specific roles assigned for Cosmos DB and Azure OpenAI access
 - **No Hardcoded Secrets**: All authentication handled through Azure identity services
 

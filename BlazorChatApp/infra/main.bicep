@@ -17,13 +17,19 @@ param containerAppName string = ''
 param cosmosDbAccountName string = ''
 
 @description('Name of the Cosmos DB database')
-param cosmosDbDatabaseName string = 'vectordb'
+param cosmosDbDatabaseName string = 'ChatRagDb'
 
 @description('Name of the Cosmos DB container')
-param cosmosDbContainerName string = 'Container3'
+param cosmosDbContainerName string = 'KnowledgeDocuments'
 
 @description('Name of the Azure OpenAI service')
 param openAiName string = ''
+
+@description('Microsoft Entra tenant ID used for application sign-in')
+param azureAdTenantId string
+
+@description('Microsoft Entra application client ID used for application sign-in')
+param azureAdClientId string
 
 // Resource token for consistent naming
 var resourceToken = uniqueString(subscription().id, resourceGroup().id, location, environmentName)
@@ -70,6 +76,8 @@ module containerApp 'modules/container-app.bicep' = {
     openAiChatDeploymentName: openAi.outputs.chatDeploymentName
     openAiEmbeddingDeploymentName: openAi.outputs.embeddingDeploymentName
     openAiEndpoint: openAi.outputs.endpoint
+    azureAdTenantId: azureAdTenantId
+    azureAdClientId: azureAdClientId
   }
 }
 

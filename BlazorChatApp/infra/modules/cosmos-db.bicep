@@ -28,7 +28,7 @@ resource cosmosDb 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' = {
       }
     ]
     // Enhanced security settings
-    disableLocalAuth: false  // Explicitly enable key-based auth for compatibility
+    disableLocalAuth: true
     enableAnalyticalStorage: false
     enableAutomaticFailover: false
     enableMultipleWriteLocations: false
